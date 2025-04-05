@@ -9,16 +9,8 @@ With its modular tool system, you can easily extend your agent's capabilities by
 To install and use this library please following:
 
 ```
-git@github.com:datascienceworld-kan/agentools.git
-cd agentools
+git clone https://github.com/agentools
 poetry install
-```
-
-To use a list of default tools inside [agentools.tools](agentools/tools/) you should set environment varibles inside `.env`:
-
-```
-TOGETHER_API_KEY="Your together API key"
-TAVILY_API_KEY="Your Tavily API key"
 ```
 
 # 2. Set up Agent
@@ -55,16 +47,22 @@ df.head()
 ```python
 plot = agent.invoke("Let's visualize Tesla stock in 2024?")
 ```
-  
+
+
+    
 ![png](asset/test_4_1.png)
     
+
+
+
+
 
 ```python
 plot = agent.invoke("Let's visualize the return of Tesla stock in 2024?")
 ```
-  
-![png](asset/return_plot.png)
-    
+
+
+
 
 # 3. Register function tool
 
