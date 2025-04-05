@@ -72,12 +72,6 @@ Function tools are registered directly in your runtime code by decorating them w
 
 
 ```python
-import json
-import os
-from functools import wraps
-from typing import Dict, Any
-import inspect
-from pathlib import Path
 from agentools.register.tool import function_tool
 from typing import List
 
@@ -92,4 +86,8 @@ agent.invoke("Sum of this list: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]?")
 ```
     'Sum of list is 55'
 
+# 4. License
+`agentools` is released under the MIT License. You are free to use, modify, and distribute the code for both commercial and non-commercial purposes.
 
+# 5. Contributing
+We welcome contributions from the community. If you have any suggestions, bug reports, or feature requests, please feel free to open an issue or submit a pull request. If you have any questions or need help, feel free to join [Discord Channel](https://discord.com/channels/1036147288994758717/1358017320970358864).
