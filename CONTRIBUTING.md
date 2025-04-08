@@ -1,4 +1,4 @@
-# Contributing to aisuite
+# Contributing to agentools
 
 First off, thanks for taking the time to contribute!
 
