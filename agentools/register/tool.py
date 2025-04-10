@@ -104,7 +104,7 @@ def register_function(module_path: str) -> None:
     "Analyze this module and return a list of tools in JSON format:"
     "- Module code:"
     f"{module_source}"
-    "Format: Let's return a list of json format without further explaination and without ```json characters markdown."
+    "Format: Let's return a list of json format without further explaination and without ```json characters markdown and keep module_path unchange."
     "[{{"
         '"tool_name": "The function",'
         '"arguments": "A dictionary of keyword-arguments to execute tool",'
@@ -124,6 +124,7 @@ def register_function(module_path: str) -> None:
 
     tools = ToolManager.load_tools()
     for tool in new_tools:
+        tool["module_path"] = module_path
         tools[tool["tool_name"]] = tool
         logging.info(f"Registered {tool['tool_name']}:\n{tool}")
     
