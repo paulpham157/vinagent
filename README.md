@@ -11,6 +11,7 @@ To install and use this library please following:
 ```
 git@github.com:datascienceworld-kan/agentools.git
 cd agentools
+pip install -r requirements.txt
 poetry install
 ```
 
