@@ -15,12 +15,13 @@ pip install -r requirements.txt
 poetry install
 ```
 
-To use a list of default tools inside [agentools.tools](agentools/tools/) you should set environment varibles inside `.env`:
+To use a list of default tools inside [agentools.tools](agentools/tools/) you should set environment varibles inside `.env` including `TOGETHER_API_KEY` to use llm models at [togetherai](https://api.together.ai/signin) site and `TAVILY_API_KEY` to use tavily websearch tool at [tavily](https://app.tavily.com/home) site:
 
 ```
 TOGETHER_API_KEY="Your together API key"
 TAVILY_API_KEY="Your Tavily API key"
 ```
+Let's create your acounts first and then create your relevant key for each website.
 
 # 2. Set up Agent
 
