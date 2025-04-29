@@ -159,7 +159,7 @@ print(message.artifact)
 
 [![Watch the video](https://img.youtube.com/vi/MUOg7MYGUzE/0.jpg)](https://youtu.be/MUOg7MYGUzE)
 
-The output is available at [examples/deepsearch.md](examples/deepsearch.md)
+The output is available at [agentools/examples/deepsearch.md](agentools/examples/deepsearch.md)
 
 # 5. License
 `agentools` is released under the MIT License. You are free to use, modify, and distribute the code for both commercial and non-commercial purposes.
