@@ -1,12 +1,11 @@
-import os
-import re
+import json
+import importlib
 from abc import ABC, abstractmethod
 from typing import Any, Awaitable, List, Optional
 from langchain_together import ChatTogether
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_openai.chat_models.base import BaseChatOpenAI
-import json
-import importlib
+from langchain_core.messages import SystemMessage, HumanMessage
 import logging
 from pathlib import Path
 from typing import Union
@@ -41,13 +40,20 @@ class Agent(AgentMeta):
     
     TOOLS_PATH = Path("tool_template/tools.json")
     
-    def __init__(self, llm: Union[ChatTogether, BaseLanguageModel, BaseChatOpenAI], tools: List = [], *args, **kwargs):
+    def __init__(self, 
+        llm: Union[ChatTogether, BaseLanguageModel, BaseChatOpenAI], 
+        tools: List = [], 
+        description: str = "You are a helpful assistant who can use the following tools to complete a task.", 
+        *args, **kwargs):
         """Initialize agent with LLM and tools list"""
         self.llm = llm
         self.tools = tools
+        self.description = description
         # Ensure tools file exists
-        self.TOOLS_PATH.parent.mkdir(exist_ok=True)
-        if not self.TOOLS_PATH.exists():
+        self.TOOLS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        # Overwrite tools.json by empty dictionary if it exists.
+        if self.TOOLS_PATH.exists():
+            self.TOOLS_PATH.unlink()
             self.TOOLS_PATH.write_text(json.dumps({}, indent=4), encoding='utf-8')
         self.register_tools(self.tools)
     
@@ -60,7 +66,9 @@ class Agent(AgentMeta):
 
 
     def invoke(self, query: str, *args, **kwargs) -> Any:
-        """Select and execute a tool based on the task description"""
+        """
+        Select and execute a tool based on the task description
+        """
         try:
             tools = json.loads(self.TOOLS_PATH.read_text(encoding='utf-8'))
         except json.JSONDecodeError:
@@ -68,34 +76,41 @@ class Agent(AgentMeta):
             self.TOOLS_PATH.write_text(json.dumps({}, indent=4), encoding='utf-8')
 
         prompt = (
-            "You are a function-calling AI agent. Select a function and its arguments "
-            f"to solve this task based on available tools.\n"
+            "You are given a task and a list of available tools.\n"
             f"- Task: {query}\n"
-            f"- Available tools: {json.dumps(tools)}\n"
-            "- Only return dictionary without explaination and do not need bounded in ```python``` or ```json```"
-            "{"
-                '"tool_name": "The function",'
+            f"- Tools: {json.dumps(tools)}\n\n"
+            "Instructions:\n"
+            "- If the task can be solved without tools, just return the answer without any explanation.\n"
+            "- If the task requires a tool, select the appropriate tool and provide the required arguments, respond only with a dictionary in the following format (no explanations, no markdown):\n"
+            '{'
+                '"tool_name": "Function name", '
                 '"arguments": "A dictionary of keyword-arguments to execute tool_name",'
-                '"module_path": "module_path to import this tool"'
-            "}"
+                '"module_path": "Path to import the tool"'
+            '}'
         )
 
-        try:
-            response = self.llm.invoke(prompt).content
-            tool_data = self._extract_json(response)
+        messages = [
+            SystemMessage(content=self.description), 
+            HumanMessage(content=prompt)
+        ]
+
+        # try:
+        response = self.llm.invoke(messages).content
+        tool_data = self._extract_json(response)
+        
+        if not tool_data or "None" in tool_data:
+            # return self.llm.invoke(query).content
+            return response
             
-            if not tool_data or "None" in tool_data:
-                return self.llm.invoke(query).content
-                
-            tool_call = json.loads(tool_data)
-            return self._execute_tool(
-                tool_call["tool_name"],
-                tool_call["arguments"],
-                tool_call["module_path"]
-            )
-        except (json.JSONDecodeError, KeyError, ValueError) as e:
-            logger.error(f"Tool calling failed: {str(e)}")
-            return None
+        tool_call = json.loads(tool_data)
+        return self._execute_tool(
+            tool_call["tool_name"],
+            tool_call["arguments"],
+            tool_call["module_path"]
+        )
+        # except (json.JSONDecodeError, KeyError, ValueError) as e:
+        #     logger.error(f"Tool calling failed: {str(e)}")
+        #     return None
         
     async def invoke_async(self, *args, **kwargs) -> Awaitable[Any]:
         """Asynchronously invoke the agent's LLM"""
