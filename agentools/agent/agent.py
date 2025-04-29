@@ -6,6 +6,7 @@ from langchain_together import ChatTogether
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_openai.chat_models.base import BaseChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages.tool import ToolMessage
 import logging
 from pathlib import Path
 from typing import Union
@@ -41,17 +42,36 @@ class Agent(AgentMeta):
     TOOLS_PATH = Path("tool_template/tools.json")
     
     def __init__(self, 
-        llm: Union[ChatTogether, BaseLanguageModel, BaseChatOpenAI], 
-        tools: List = [], 
-        description: str = "You are a helpful assistant who can use the following tools to complete a task.", 
-        *args, **kwargs):
-        """Initialize agent with LLM and tools list"""
+            llm: Union[ChatTogether, BaseLanguageModel, BaseChatOpenAI], 
+            tools: List = [], 
+            description: str = "You are a helpful assistant who can use the following tools to complete a task.", 
+            skills: list[str] = ["You can answer the user question with tools"],
+            *args, **kwargs):
+        """
+        Initialize the agent with a language model, a list of tools, a description, and a set of skills.
+        Parameters:
+        ----------
+        llm : Union[ChatTogether, BaseLanguageModel, BaseChatOpenAI]
+            An instance of a language model used by the agent to process and generate responses.
+        
+        tools : List, optional
+            A list of tools that the agent can utilize when performing tasks. Defaults to an empty list.
+        
+        description : str, optional
+            A brief description of the assistant's capabilities. Defaults to a general helpful assistant message.
+        
+        skills : list[str], optional
+            A list of skills or abilities describing what the assistant can do. Defaults to a basic tool-usage skill.
+        
+        *args, **kwargs : Any
+            Additional arguments passed to the superclass or future extensions.
+        """
+
         self.llm = llm
         self.tools = tools
         self.description = description
-        # Ensure tools file exists
+        self.skills = skills
         self.TOOLS_PATH.parent.mkdir(parents=True, exist_ok=True)
-        # Overwrite tools.json by empty dictionary if it exists.
         if self.TOOLS_PATH.exists():
             self.TOOLS_PATH.unlink()
             self.TOOLS_PATH.write_text(json.dumps({}, indent=4), encoding='utf-8')
@@ -80,37 +100,37 @@ class Agent(AgentMeta):
             f"- Task: {query}\n"
             f"- Tools: {json.dumps(tools)}\n\n"
             "Instructions:\n"
-            "- If the task can be solved without tools, just return the answer without any explanation.\n"
+            "- If the task can be solved without tools, just return the answer without any explanation\n"
             "- If the task requires a tool, select the appropriate tool and provide the required arguments, respond only with a dictionary in the following format (no explanations, no markdown):\n"
             '{'
                 '"tool_name": "Function name", '
                 '"arguments": "A dictionary of keyword-arguments to execute tool_name",'
                 '"module_path": "Path to import the tool"'
             '}'
+            "Let's say I don't know if you are unsure the answer, don't make up anything."
         )
-
+        skills = "- ".join(self.skills)
         messages = [
-            SystemMessage(content=self.description), 
+            SystemMessage(content=f"{self.description}\nHere is your skills: {skills}"), 
             HumanMessage(content=prompt)
         ]
 
-        # try:
-        response = self.llm.invoke(messages).content
-        tool_data = self._extract_json(response)
-        
-        if not tool_data or "None" in tool_data:
-            # return self.llm.invoke(query).content
-            return response
+        try:
+            response = self.llm.invoke(messages)
+            tool_data = self._extract_json(response.content)
             
-        tool_call = json.loads(tool_data)
-        return self._execute_tool(
-            tool_call["tool_name"],
-            tool_call["arguments"],
-            tool_call["module_path"]
-        )
-        # except (json.JSONDecodeError, KeyError, ValueError) as e:
-        #     logger.error(f"Tool calling failed: {str(e)}")
-        #     return None
+            if not tool_data or "None" in tool_data:
+                return response
+                
+            tool_call = json.loads(tool_data)
+            return self._execute_tool(
+                tool_call["tool_name"],
+                tool_call["arguments"],
+                tool_call["module_path"]
+            )
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            logger.error(f"Tool calling failed: {str(e)}")
+            return None
         
     async def invoke_async(self, *args, **kwargs) -> Awaitable[Any]:
         """Asynchronously invoke the agent's LLM"""
@@ -118,20 +138,34 @@ class Agent(AgentMeta):
 
     def _execute_tool(self, tool_name: str, arguments: dict, module_path: str) -> Any:
         """Execute the specified tool with given arguments"""
+        # If function is directly registered by decorator @function_tool. Access it on runtime context.
+        registered_functions = ToolManager.load_tools()
+        
         if module_path == '__runtime__' and tool_name in ToolManager._registered_functions:
             func = ToolManager._registered_functions[tool_name]
-            return func(**arguments)
+            content = f"Completed executing tool {tool_name}({arguments})"
+            logger.info(content)
+            artifact = func(**arguments)
+            tool_call_id = registered_functions[tool_name]['tool_call_id']
+            message = ToolMessage(content=content, artifact=artifact, tool_call_id=tool_call_id)
+            return message
         
-        try:
-            if tool_name in globals():
-                return globals()[tool_name](**arguments)
-                
-            module = importlib.import_module(module_path, package=__package__)
-            func = getattr(module, tool_name)
-            return func(**arguments)
-        except (ImportError, AttributeError) as e:
-            logger.error(f"Error executing tool {tool_name}: {str(e)}")
-            return None
+        # If function is imported from a module, access it on module path.
+        # try:
+        if tool_name in globals():
+            return globals()[tool_name](**arguments)
+            
+        module = importlib.import_module(module_path, package=__package__)
+        func = getattr(module, tool_name)
+        content = f"Completed executing tool {tool_name}({arguments})"
+        logger.info(content)
+        artifact = func(**arguments)
+        tool_call_id = registered_functions[tool_name]['tool_call_id']
+        message = ToolMessage(content=content, artifact=artifact, tool_call_id=tool_call_id)
+        return message
+        # except (ImportError, AttributeError) as e:
+        #     logger.error(f"Error executing tool {tool_name}: {str(e)}")
+        #     return None
 
     @staticmethod
     def _extract_json(text: str) -> Optional[str]:

@@ -28,10 +28,7 @@ TAVILY_API_KEY="Your Tavily API key"
 
 
 ```python
-import os
-import sys
 from langchain_together import ChatTogether 
-sys.path.append(os.path.join(os.getcwd(), "agentools"))
 from agentools.agent.agent import Agent
 from dotenv import load_dotenv
 load_dotenv()
@@ -42,25 +39,65 @@ llm = ChatTogether(
 
 # Step 1: Create Agent with tools
 agent = Agent(
+    description="You are a Financial Analyst",
     llm = llm,
-    tools = ['agentools.tools.yfinance_tools', 'agentools.tools.websearch_tools']
+    skills = [
+        "Deeply analyzing financial markets", 
+        "Searching information about stock price",
+        "Visualization about stock price"],
+    tools = ['agentools.tools.websearch_tools',
+             'agentools.tools.yfinance_tools']
 )
 
 # Step 2: invoke the agent
+message = agent.invoke("Who you are?")
+```
+
+If the answer is a normal message without using any tools, it will be an `AIMessage`. By contrast, it will have `ToolMessage` type. For examples:
+
+```
+message
+```
+```
+AIMessage(content='I am a Financial Analyst.', additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 7, 'prompt_tokens': 308, 'total_tokens': 315, 'completion_tokens_details': None, 'prompt_tokens_details': None, 'cached_tokens': 0}, 'model_name': 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free', 'system_fingerprint': None, 'finish_reason': 'stop', 'logprobs': None}, id='run-070f7431-7176-42a8-ab47-ed83657c9463-0', usage_metadata={'input_tokens': 308, 'output_tokens': 7, 'total_tokens': 315, 'input_token_details': {}, 'output_token_details': {}})
+```
+Access to `content` property to get the string content.
+
+```
+message.content
+```
+```
+I am a Financial Analyst.
+```
+
+The following function need to use yfinancial tool, therefore the return value will be `ToolMessage` with the a stored pandas.DataFrame in `artifact` property.
+
+```
 df = agent.invoke("What is the price of Tesla stock in 2024?")
-df.head()
+df
+```
+```
+ToolMessage(content="Completed executing tool fetch_stock_data({'symbol': 'TSLA', 'start_date': '2024-01-01', 'end_date': '2024-12-31', 'interval': '1d'})", tool_call_id='tool_cde0b895-260a-468f-ac01-7efdde19ccb7', artifact=pandas.DataFrame)
+```
+
+To access `pandas.DataFrame` value:
+
+```
+df.artifact.head()
 ```
 ![png](asset/table.png)
 
+Another example, if you visualize a stock price using a tool, the output message is a `ToolMessage` with the saved `artifact` is a plotly plot.
 
-```python
+```
+# return a ToolMessage which we can access to plot by plot.artifact and content by plot.content.
 plot = agent.invoke("Let's visualize Tesla stock in 2024?")
 ```
-  
 ![png](asset/test_4_1.png)
     
 
-```python
+```
+# return a ToolMessage which we can access to plot by plot.artifact and content by plot.content.
 plot = agent.invoke("Let's visualize the return of Tesla stock in 2024?")
 ```
   
@@ -80,13 +117,17 @@ from typing import List
 def sum_of_series(x: List[float]):
     return f"Sum of list is {sum(x)}"
 ```
-
+```
+INFO:root:Registered tool: sum_of_series (runtime)
+```
 
 ```python
-agent.invoke("Sum of this list: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]?")
+message = agent.invoke("Sum of this list: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]?")
+message
 ```
-    'Sum of list is 55'
-
+```
+ToolMessage(content="Completed executing tool sum_of_series({'x': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]})", tool_call_id='tool_56f40902-33dc-45c6-83a7-27a96589d528', artifact='Sum of list is 55')
+```
 # 4. License
 `agentools` is released under the MIT License. You are free to use, modify, and distribute the code for both commercial and non-commercial purposes.
 

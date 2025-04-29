@@ -1,3 +1,4 @@
+import sys
 import os
 import json
 import inspect
@@ -6,8 +7,7 @@ import logging
 from functools import wraps
 from typing import Dict, Any, Optional, Callable
 import ast
-import sys
-from pprint import pprint
+import uuid
 
 sys.path.append(os.path.join(os.getcwd(), "tool_template"))
 from .initialize import llm
@@ -83,6 +83,7 @@ def function_tool(func):
             "return": str(signature.return_annotation) if signature.return_annotation != inspect.Signature.empty else "Any",
             "docstring": (func.__doc__ or "").strip(),
             "module_path": module_path,
+            "tool_call_id": "tool_"+str(uuid.uuid4()),
             "is_runtime": module_path == "__runtime__"
         }
 
@@ -126,6 +127,7 @@ def register_function(module_path: str) -> None:
     for tool in new_tools:
         tool["module_path"] = module_path
         tools[tool["tool_name"]] = tool
+        tools[tool["tool_name"]]["tool_call_id"] = "tool_"+str(uuid.uuid4())
         logging.info(f"Registered {tool['tool_name']}:\n{tool}")
     
     ToolManager.save_tools(tools)
