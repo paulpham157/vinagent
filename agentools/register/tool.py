@@ -108,7 +108,7 @@ def register_function(module_path: str) -> None:
     "Format: Let's return a list of json format without further explaination and without ```json characters markdown and keep module_path unchange."
     "[{{"
         '"tool_name": "The function",'
-        '"arguments": "A dictionary of keyword-arguments to execute tool",'
+        '"arguments": "A dictionary of keyword-arguments to execute tool. Let\'s keep default value if it was set",'
         '"return": "Return value of this tool",'
         '"docstring": "Docstring of this tool",'
         '"dependencies": "List of libraries need to run this tool",'

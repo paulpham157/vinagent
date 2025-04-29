@@ -128,8 +128,41 @@ message
 ```
 ToolMessage(content="Completed executing tool sum_of_series({'x': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]})", tool_call_id='tool_56f40902-33dc-45c6-83a7-27a96589d528', artifact='Sum of list is 55')
 ```
-# 4. License
+
+# 4. Deep Search
+
+With agentools, you can invent a complex workflow by combining multiple tools into a single agent. This allows you to create a more sophisticated and flexible agent that can adapt to different task. Let's see how an agent can be created to help with financial analysis by using `deepsearch` tool, which allows you to search for information in a structured manner. This tool is particularly useful for tasks that require a deep understanding of the data and the ability to navigate through complex information.
+
+```
+from langchain_together import ChatTogether 
+from agentools.agent.agent import Agent
+from dotenv import load_dotenv
+load_dotenv()
+
+llm = ChatTogether(
+    model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+)
+
+agent = Agent(
+    description="You are a Financial Analyst",
+    llm = llm,
+    skills = [
+        "Deeply analyzing financial markets", 
+        "Searching information about stock price",
+        "Visualization about stock price"],
+    tools = ['agentools.tools.deepsearch']
+)
+    
+message = agent.invoke("Let's analyze Tesla stock in 2025?")
+print(message.artifact)
+```
+
+[![Watch the video](https://img.youtube.com/vi/MUOg7MYGUzE/0.jpg)](https://youtu.be/MUOg7MYGUzE)
+
+The output is available at [examples/deepsearch.md](examples/deepsearch.md)
+
+# 5. License
 `agentools` is released under the MIT License. You are free to use, modify, and distribute the code for both commercial and non-commercial purposes.
 
-# 5. Contributing
+# 6. Contributing
 We welcome contributions from the community. If you would like to contribute, please read our [Contributing Guide](https://github.com/datascienceworld-kan/agentools/blob/main/CONTRIBUTING.md). If you have any questions or need help, feel free to join [Discord Channel](https://discord.com/channels/1036147288994758717/1358017320970358864).
