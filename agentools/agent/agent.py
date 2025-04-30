@@ -98,16 +98,17 @@ class Agent(AgentMeta):
         prompt = (
             "You are given a task and a list of available tools.\n"
             f"- Task: {query}\n"
-            f"- Tools: {json.dumps(tools)}\n\n"
+            f"- Tools list: {json.dumps(tools)}\n\n"
             "Instructions:\n"
             "- If the task can be solved without tools, just return the answer without any explanation\n"
-            "- If the task requires a tool, select the appropriate tool and provide the required arguments, respond only with a dictionary in the following format (no explanations, no markdown):\n"
-            '{'
-                '"tool_name": "Function name", '
-                '"arguments": "A dictionary of keyword-arguments to execute tool_name",'
-                '"module_path": "Path to import the tool"'
-            '}'
-            "Let's say I don't know if you are unsure the answer, don't make up anything."
+            "- If the task requires a tool, select the appropriate tool with its relevant arguments from Tools list according to following format (no explanations, no markdown):\n"
+            '{\n'
+                '"tool_name": "Function name",\n'
+                '"arguments": "A dictionary of keyword-arguments to execute tool_name",\n'
+                '"module_path": "Path to import the tool"\n'
+            '}\n'
+            "Let's say I don't know and suggest where to search if you are unsure the answer.\n"
+            "Not make up anything.\n"
         )
         skills = "- ".join(self.skills)
         messages = [
@@ -118,10 +119,10 @@ class Agent(AgentMeta):
         try:
             response = self.llm.invoke(messages)
             tool_data = self._extract_json(response.content)
-            
-            if not tool_data or "None" in tool_data:
+
+            if not tool_data or ("None" in tool_data) or (tool_data == "{}"):
                 return response
-                
+            
             tool_call = json.loads(tool_data)
             return self._execute_tool(
                 tool_call["tool_name"],
