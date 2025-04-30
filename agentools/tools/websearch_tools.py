@@ -3,11 +3,13 @@ from dotenv import load_dotenv
 from tavily import TavilyClient
 from dataclasses import dataclass
 from typing import Union, Any
+
 # load environment variables from .env file
 _ = load_dotenv()
 
+
 @dataclass
-class WebSearchClient():
+class WebSearchClient:
     # connect
     tavily_client = TavilyClient(api_key=os.environ.get("TAVILY_API_KEY"))
     # run search
@@ -17,10 +19,10 @@ class WebSearchClient():
             query_string = "\n".join([f"{k}: {v}" for (k, v) in query.items()])
         else:
             query_string = query
-        result = self.tavily_client.search(query_string,
-                               include_answer=True)
+        result = self.tavily_client.search(query_string, include_answer=True)
         # print the answer
         return result["answer"]
+
 
 def search_api(query: Union[str, dict[str, str]]) -> Any:
     """

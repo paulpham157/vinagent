@@ -5,7 +5,13 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from typing import Optional
 
-def fetch_stock_data(symbol: str, start_date: str = "2020-01-01", end_date: str = "2025-01-01", interval: str = "1d") -> pd.DataFrame:
+
+def fetch_stock_data(
+    symbol: str,
+    start_date: str = "2020-01-01",
+    end_date: str = "2025-01-01",
+    interval: str = "1d",
+) -> pd.DataFrame:
     """
     Fetch historical stock data from Yahoo Finance.
 
@@ -29,11 +35,16 @@ def fetch_stock_data(symbol: str, start_date: str = "2020-01-01", end_date: str 
         print(f"Error fetching data for {symbol}: {e}")
         return None
 
-def visualize_stock_data(symbol: str, start_date: str = "2020-01-01", 
-                        end_date: str = "2025-01-01", interval: str = "1d") -> None:
+
+def visualize_stock_data(
+    symbol: str,
+    start_date: str = "2020-01-01",
+    end_date: str = "2025-01-01",
+    interval: str = "1d",
+) -> None:
     """
     Visualize stock data with multiple chart types.
-    
+
     Args:
         symbol (str): Stock symbol (e.g., 'AAPL')
         start_date (str): Start date (YYYY-MM-DD)
@@ -50,77 +61,92 @@ def visualize_stock_data(symbol: str, start_date: str = "2020-01-01",
 
     # 1. Matplotlib - Price and Volume Plot
     plt.figure(figsize=(12, 8))
-    
+
     # Price subplot
     plt.subplot(2, 1, 1)
-    plt.plot(df['Date'], df['Close'], label='Close Price', color='blue')
-    plt.title(f'{symbol} Stock Price and Volume')
-    plt.ylabel('Price ($)')
+    plt.plot(df["Date"], df["Close"], label="Close Price", color="blue")
+    plt.title(f"{symbol} Stock Price and Volume")
+    plt.ylabel("Price ($)")
     plt.legend()
     plt.grid(True)
-    
+
     # Volume subplot
     plt.subplot(2, 1, 2)
-    plt.bar(df['Date'], df['Volume'], color='gray')
-    plt.ylabel('Volume')
-    plt.xlabel('Date')
+    plt.bar(df["Date"], df["Volume"], color="gray")
+    plt.ylabel("Volume")
+    plt.xlabel("Date")
     plt.grid(True)
-    
+
     plt.tight_layout()
     plt.show()
 
     # 2. Plotly - Interactive Candlestick Chart with Moving Average
-    fig = make_subplots(rows=2, cols=1, 
-                       shared_xaxes=True, 
-                       vertical_spacing=0.1,
-                       subplot_titles=('Candlestick', 'Volume'),
-                       row_heights=[0.7, 0.3])
+    fig = make_subplots(
+        rows=2,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.1,
+        subplot_titles=("Candlestick", "Volume"),
+        row_heights=[0.7, 0.3],
+    )
 
     # Candlestick
     fig.add_trace(
-        go.Candlestick(x=df['Date'],
-                      open=df['Open'],
-                      high=df['High'],
-                      low=df['Low'],
-                      close=df['Close'],
-                      name='OHLC'),
-        row=1, col=1
+        go.Candlestick(
+            x=df["Date"],
+            open=df["Open"],
+            high=df["High"],
+            low=df["Low"],
+            close=df["Close"],
+            name="OHLC",
+        ),
+        row=1,
+        col=1,
     )
 
     # 20-day Moving Average
-    df['MA20'] = df['Close'].rolling(window=20).mean()
+    df["MA20"] = df["Close"].rolling(window=20).mean()
     fig.add_trace(
-        go.Scatter(x=df['Date'], y=df['MA20'], 
-                  line=dict(color='purple', width=1),
-                  name='20-day MA'),
-        row=1, col=1
+        go.Scatter(
+            x=df["Date"],
+            y=df["MA20"],
+            line=dict(color="purple", width=1),
+            name="20-day MA",
+        ),
+        row=1,
+        col=1,
     )
 
     # Volume
     fig.add_trace(
-        go.Bar(x=df['Date'], y=df['Volume'], 
-              name='Volume', marker_color='gray'),
-        row=2, col=1
+        go.Bar(x=df["Date"], y=df["Volume"], name="Volume", marker_color="gray"),
+        row=2,
+        col=1,
     )
 
     # Update layout
     fig.update_layout(
-        title=f'{symbol} Stock Price Analysis',
-        yaxis_title='Price ($)',
+        title=f"{symbol} Stock Price Analysis",
+        yaxis_title="Price ($)",
         height=800,
         showlegend=True,
-        template='plotly_white'
+        template="plotly_white",
     )
 
     # Update axes
     fig.update_xaxes(rangeslider_visible=False)
-    fig.update_yaxes(title_text='Volume', row=2, col=1)
+    fig.update_yaxes(title_text="Volume", row=2, col=1)
 
     fig.show()
     return fig
 
-def plot_returns(symbol: str, start_date: str = "2020-01-01", 
-                end_date: str = "2025-01-01", interval: str = "1d") -> None:
+
+def plot_returns(
+    symbol: str,
+    start_date: str = "2020-01-01",
+    end_date: str = "2025-01-01",
+    interval: str = "1d",
+) -> None:
     """
     Visualize cumulative returns of the stock.
     """
@@ -129,24 +155,27 @@ def plot_returns(symbol: str, start_date: str = "2020-01-01",
         return
 
     # Calculate daily returns and cumulative returns
-    df['Daily_Return'] = df['Close'].pct_change()
-    df['Cumulative_Return'] = (1 + df['Daily_Return']).cumprod() - 1
+    df["Daily_Return"] = df["Close"].pct_change()
+    df["Cumulative_Return"] = (1 + df["Daily_Return"]).cumprod() - 1
 
     # Plot with Plotly
     fig = go.Figure()
     fig.add_trace(
-        go.Scatter(x=df.index, y=df['Cumulative_Return'] * 100,
-                  mode='lines',
-                  name='Cumulative Return',
-                  line=dict(color='green'))
+        go.Scatter(
+            x=df.index,
+            y=df["Cumulative_Return"] * 100,
+            mode="lines",
+            name="Cumulative Return",
+            line=dict(color="green"),
+        )
     )
 
     fig.update_layout(
-        title=f'{symbol} Cumulative Returns',
-        xaxis_title='Date',
-        yaxis_title='Return (%)',
-        template='plotly_white',
-        height=500
+        title=f"{symbol} Cumulative Returns",
+        xaxis_title="Date",
+        yaxis_title="Return (%)",
+        template="plotly_white",
+        height=500,
     )
 
     fig.show()
