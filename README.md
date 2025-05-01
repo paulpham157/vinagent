@@ -195,7 +195,7 @@ print(message.artifact)
 
 [![Watch the video](https://img.youtube.com/vi/c8ylwGDYl2c/0.jpg)](https://youtu.be/c8ylwGDYl2c?si=D7aMgY5f_WJqPbFm)
 
-The output is available at [agentools/examples/todaytrending.md](agentools/examples/todaytrend.md)
+The output is available at [agentools/examples/todaytrend.md](agentools/examples/todaytrend.md)
 
 
 # 5. License
