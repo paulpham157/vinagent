@@ -132,7 +132,9 @@ message
 ToolMessage(content="Completed executing tool sum_of_series({'x': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]})", tool_call_id='tool_56f40902-33dc-45c6-83a7-27a96589d528', artifact='Sum of list is 55')
 ```
 
-# 4. Deep Search
+# 4. Advance Features
+
+## 4.1. Deep Search
 
 With agentools, you can invent a complex workflow by combining multiple tools into a single agent. This allows you to create a more sophisticated and flexible agent that can adapt to different task. Let's see how an agent can be created to help with financial analysis by using `deepsearch` tool, which allows you to search for information in a structured manner. This tool is particularly useful for tasks that require a deep understanding of the data and the ability to navigate through complex information.
 
@@ -163,6 +165,38 @@ print(message.artifact)
 [![Watch the video](https://img.youtube.com/vi/MUOg7MYGUzE/0.jpg)](https://youtu.be/MUOg7MYGUzE)
 
 The output is available at [agentools/examples/deepsearch.md](agentools/examples/deepsearch.md)
+
+## 4.2. Trending Search
+
+Exceptionally, Agentools also offers a feature to summarize and highlight the top daily news on the internet based on any topic you are looking for, regardless of the language used. This is achieved by using the `trending_news` tool.
+
+```
+from langchain_together import ChatTogether 
+from agentools.agent.agent import Agent
+from dotenv import load_dotenv
+load_dotenv()
+
+llm = ChatTogether(
+    model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+)
+
+agent = Agent(
+    description="You are a Trending News Analyst",
+    llm = llm,
+    skills = [
+        "Searching the trending news on realtime from google news",
+        "Deeply analyzing top trending news"],
+    tools = ['agentools.tools.trending_news']
+)
+    
+message = agent.invoke("Tìm 5 tin tức nổi bật về tình hình giá vàng sáng hôm nay")
+print(message.artifact)
+```
+
+[![Watch the video](https://img.youtube.com/vi/c8ylwGDYl2c/0.jpg)](https://youtu.be/c8ylwGDYl2c?si=D7aMgY5f_WJqPbFm)
+
+The output is available at [agentools/examples/todaytrending.md](agentools/examples/todaytrending.md)
+
 
 # 5. License
 `agentools` is released under the MIT License. You are free to use, modify, and distribute the code for both commercial and non-commercial purposes.
