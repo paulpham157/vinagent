@@ -1,5 +1,5 @@
 # Giới thiệu
-Đây là bảng tổng kết tiến hành ngày 1/5/2024 cho câu truy vấn:
+Đây là bảng tổng kết tiến hành ngày 30/4-1/5/2025 cho câu truy vấn:
 "Tìm 5 tin tức nổi bật về tình hình giá vàng sáng hôm nay"
 
 # Giá vàng ngày 30/4: Vàng thế giới đảo chiều giảm - Báo Nhân Dân điện tử
