@@ -86,6 +86,7 @@ To access `pandas.DataFrame` value:
 ```
 df.artifact.head()
 ```
+
 ![png](asset/table.png)
 
 Another example, if you visualize a stock price using a tool, the output message is a `ToolMessage` with the saved `artifact` is a plotly plot.
@@ -94,6 +95,7 @@ Another example, if you visualize a stock price using a tool, the output message
 # return a ToolMessage which we can access to plot by plot.artifact and content by plot.content.
 plot = agent.invoke("Let's visualize Tesla stock in 2024?")
 ```
+
 ![png](asset/test_4_1.png)
     
 
