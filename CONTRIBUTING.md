@@ -35,7 +35,7 @@ and smooth out the experience for all involved. The community looks forward to y
 > [Documentation](https://github.com/datascienceworld-kan/agentools/blob/main/README.md).
 
 Before you ask a question, it is best to search for existing [Issues](https://github.com/datascienceworld-kan/agentools/issues)
-that might help you. If you find a relevant issue that already exists and still need clarification, please add your question to that existing issue. We also recommend reaching out to the community in the aisuite [Discord](https://discord.com/channels/1036147288994758717/1358017320970358864) server.
+that might help you. If you find a relevant issue that already exists and still need clarification, please add your question to that existing issue. We also recommend reaching out to the community in the agentools [Discord](https://discord.com/channels/1036147288994758717/1358017320970358864) server.
 
 If you then still feel the need to ask a question and need clarification, we recommend the following:
 
@@ -110,7 +110,7 @@ Please use the issue templates provided.
 
 ### Suggesting Enhancements
 
-This section guides you through submitting an enhancement suggestion for aisuite,
+This section guides you through submitting an enhancement suggestion for agentools,
 **including completely new features and minor improvements to existing functionality**. Following these
 guidelines will help maintainers and the community to understand your suggestion and find related suggestions.
 
