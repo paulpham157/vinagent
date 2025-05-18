@@ -10,8 +10,8 @@ from langchain_core.messages.tool import ToolMessage
 import logging
 from pathlib import Path
 from typing import Union
-from agentcore.register.tool import ToolManager
-from agentcore.memory.memory import Memory
+from vinagent.register.tool import ToolManager
+from vinagent.memory.memory import Memory
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)

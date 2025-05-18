@@ -1,6 +1,6 @@
 # 1. Introduction
 
-`agentcore` is a lightweight and flexible library designed for building smart agent assistants across various industries. Whether you're creating an AI-powered customer service bot, a data analysis assistant, or a domain-specific automation agent, agentcore provides a simple yet powerful foundation.
+`vinagent` is a lightweight and flexible library designed for building smart agent assistants across various industries. Whether you're creating an AI-powered customer service bot, a data analysis assistant, or a domain-specific automation agent, vinagent provides a simple yet powerful foundation.
 
 With its modular tool system, you can easily extend your agent's capabilities by integrating a wide range of tools. Each tool is self-contained, well-documented, and can be registered dynamically—making it effortless to scale and adapt your agent to new tasks or environments.
 
@@ -9,13 +9,19 @@ With its modular tool system, you can easily extend your agent's capabilities by
 To install and use this library please following:
 
 ```
-git@github.com:datascienceworld-kan/agentcore.git
-cd agentcore
+git@github.com:datascienceworld-kan/vinagent.git
+cd vinagent
 pip install -r requirements.txt
 poetry install
 ```
 
-To use a list of default tools inside [agentcore.tools](agentcore/tools/) you should set environment varibles inside `.env` including `TOGETHER_API_KEY` to use llm models at [togetherai](https://api.together.ai/signin) site and `TAVILY_API_KEY` to use tavily websearch tool at [tavily](https://app.tavily.com/home) site:
+Or you can install by pip command
+
+```
+pip install vinagent
+```
+
+To use a list of default tools inside [vinagent.tools](vinagent/tools/) you should set environment varibles inside `.env` including `TOGETHER_API_KEY` to use llm models at [togetherai](https://api.together.ai/signin) site and `TAVILY_API_KEY` to use tavily websearch tool at [tavily](https://app.tavily.com/home) site:
 
 ```
 TOGETHER_API_KEY="Your together API key"
@@ -25,12 +31,12 @@ Let's create your acounts first and then create your relevant key for each websi
 
 # 2. Set up Agent
 
-`agentcore` is a flexible library for creating intelligent agents. You can configure your agent with tools, each encapsulated in a Python module under `agentcore.tools`. This provides a workspace of tools that agents can use to interact with and operate in the realistic world. Each tool is a Python file with full documentation and it can be independently ran. For example, the [agentcore.tools.websearch_tools](agentcore/tools/websearch_tools.py) module contains code for interacting with a search API.
+`vinagent` is a flexible library for creating intelligent agents. You can configure your agent with tools, each encapsulated in a Python module under `vinagent.tools`. This provides a workspace of tools that agents can use to interact with and operate in the realistic world. Each tool is a Python file with full documentation and it can be independently ran. For example, the [vinagent.tools.websearch_tools](vinagent/tools/websearch_tools.py) module contains code for interacting with a search API.
 
 
 ```python
 from langchain_together import ChatTogether 
-from agentcore.agent.agent import Agent
+from vinagent.agent.agent import Agent
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -46,8 +52,8 @@ agent = Agent(
         "Deeply analyzing financial markets", 
         "Searching information about stock price",
         "Visualization about stock price"],
-    tools = ['agentcore.tools.websearch_tools',
-             'agentcore.tools.yfinance_tools'],
+    tools = ['vinagent.tools.websearch_tools',
+             'vinagent.tools.yfinance_tools'],
     tools_path = 'templates/tools.json' # Place to save tools. Default is 'templates/tools.json',
     is_reset_tools = True # If True, will reset tools every time. Default is False
 )
@@ -115,7 +121,7 @@ Function tools are registered directly in your runtime code by decorating them w
 
 
 ```python
-from agentcore.register.tool import function_tool
+from vinagent.register.tool import function_tool
 from typing import List
 
 @function_tool
@@ -138,11 +144,11 @@ ToolMessage(content="Completed executing tool sum_of_series({'x': [1, 2, 3, 4, 5
 
 ## 4.1. Deep Search
 
-With agentcore, you can invent a complex workflow by combining multiple tools into a single agent. This allows you to create a more sophisticated and flexible agent that can adapt to different task. Let's see how an agent can be created to help with financial analysis by using `deepsearch` tool, which allows you to search for information in a structured manner. This tool is particularly useful for tasks that require a deep understanding of the data and the ability to navigate through complex information.
+With vinagent, you can invent a complex workflow by combining multiple tools into a single agent. This allows you to create a more sophisticated and flexible agent that can adapt to different task. Let's see how an agent can be created to help with financial analysis by using `deepsearch` tool, which allows you to search for information in a structured manner. This tool is particularly useful for tasks that require a deep understanding of the data and the ability to navigate through complex information.
 
 ```
 from langchain_together import ChatTogether 
-from agentcore.agent import Agent
+from vinagent.agent import Agent
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -157,7 +163,7 @@ agent = Agent(
         "Deeply analyzing financial markets", 
         "Searching information about stock price",
         "Visualization about stock price"],
-    tools = ['agentcore.tools.deepsearch']
+    tools = ['vinagent.tools.deepsearch']
 )
     
 message = agent.invoke("Let's analyze Tesla stock in 2025?")
@@ -166,15 +172,15 @@ print(message.artifact)
 
 [![Watch the video](https://img.youtube.com/vi/MUOg7MYGUzE/0.jpg)](https://youtu.be/MUOg7MYGUzE)
 
-The output is available at [agentcore/examples/deepsearch.md](agentcore/examples/deepsearch.md)
+The output is available at [vinagent/examples/deepsearch.md](vinagent/examples/deepsearch.md)
 
 ## 4.2. Trending Search
 
-Exceptionally, agentcore also offers a feature to summarize and highlight the top daily news on the internet based on any topic you are looking for, regardless of the language used. This is achieved by using the `trending_news` tool.
+Exceptionally, vinagent also offers a feature to summarize and highlight the top daily news on the internet based on any topic you are looking for, regardless of the language used. This is achieved by using the `trending_news` tool.
 
 ```
 from langchain_together import ChatTogether 
-from agentcore.agent.agent import Agent
+from vinagent.agent.agent import Agent
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -188,7 +194,7 @@ agent = Agent(
     skills = [
         "Searching the trending news on realtime from google news",
         "Deeply analyzing top trending news"],
-    tools = ['agentcore.tools.trending_news']
+    tools = ['vinagent.tools.trending_news']
 )
     
 message = agent.invoke("Tìm 5 tin tức nổi bật về tình hình giá vàng sáng hôm nay")
@@ -197,7 +203,7 @@ print(message.artifact)
 
 [![Watch the video](https://img.youtube.com/vi/c8ylwGDYl2c/0.jpg)](https://youtu.be/c8ylwGDYl2c?si=D7aMgY5f_WJqPbFm)
 
-The output is available at [agentcore/examples/todaytrend.md](agentcore/examples/todaytrend.md)
+The output is available at [vinagent/examples/todaytrend.md](vinagent/examples/todaytrend.md)
 
 
 # 5. Agent with Memory (>=0.1.2)
@@ -209,7 +215,7 @@ The following code to save each conversation into short-memory.
 ```
 from langchain_together.chat_models import ChatTogether
 from dotenv import load_dotenv
-from agentcore.memory import Memory
+from vinagent.memory import Memory
 
 load_dotenv()
 
@@ -265,8 +271,8 @@ To adhere Memmory to each Agent
 import os
 import sys
 from langchain_together import ChatTogether 
-from agentcore.agent import Agent
-from agentcore.memory.memory import Memory
+from vinagent.agent import Agent
+from vinagent.memory.memory import Memory
 from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
@@ -294,7 +300,7 @@ message.content
 ```
 
 # 6. License
-`agentcore` is released under the MIT License. You are free to use, modify, and distribute the code for both commercial and non-commercial purposes.
+`vinagent` is released under the MIT License. You are free to use, modify, and distribute the code for both commercial and non-commercial purposes.
 
 # 7. Contributing
-We welcome contributions from the community. If you would like to contribute, please read our [Contributing Guide](https://github.com/datascienceworld-kan/agentcore/blob/main/CONTRIBUTING.md). If you have any questions or need help, feel free to join [Discord Channel](https://discord.com/channels/1036147288994758717/1358017320970358864).
+We welcome contributions from the community. If you would like to contribute, please read our [Contributing Guide](https://github.com/datascienceworld-kan/vinagent/blob/main/CONTRIBUTING.md). If you have any questions or need help, feel free to join [Discord Channel](https://discord.com/channels/1036147288994758717/1358017320970358864).

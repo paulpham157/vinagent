@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "agentcore"
+name = "vinagent"
 version = "0.0.1"
 description = ""
 authors = ["phamdinhkhanh <phamdinhkhanh.tkt53.neu@gmail.com>"]
