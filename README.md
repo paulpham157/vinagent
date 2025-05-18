@@ -206,9 +206,9 @@ print(message.artifact)
 The output is available at [vinagent/examples/todaytrend.md](vinagent/examples/todaytrend.md)
 
 
-# 5. Agent with Memory (>=0.1.2)
+# 5. Agent with Memory
 
-There is a special upgradation from version 0.1.2 that allows to adhere Memory for each Agent. This is useful when you want to keep track of the user's behavior and conceptualize them as a knowledge graph for the agent. Therefore, it helps agent become more intelligent and capable of understanding personality and responding to user queries with greater accuracy.
+There is a special feature that allows to adhere Memory for each Agent. This is useful when you want to keep track of the user's behavior and conceptualize them as a knowledge graph for the agent. Therefore, it helps agent become more intelligent and capable of understanding personality and responding to user queries with greater accuracy.
 
 The following code to save each conversation into short-memory.
 
