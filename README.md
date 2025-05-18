@@ -1,6 +1,6 @@
 # 1. Introduction
 
-`agentools` is a lightweight and flexible library designed for building smart agent assistants across various industries. Whether you're creating an AI-powered customer service bot, a data analysis assistant, or a domain-specific automation agent, agentools provides a simple yet powerful foundation.
+`agentcore` is a lightweight and flexible library designed for building smart agent assistants across various industries. Whether you're creating an AI-powered customer service bot, a data analysis assistant, or a domain-specific automation agent, agentcore provides a simple yet powerful foundation.
 
 With its modular tool system, you can easily extend your agent's capabilities by integrating a wide range of tools. Each tool is self-contained, well-documented, and can be registered dynamically—making it effortless to scale and adapt your agent to new tasks or environments.
 
@@ -9,13 +9,13 @@ With its modular tool system, you can easily extend your agent's capabilities by
 To install and use this library please following:
 
 ```
-git@github.com:datascienceworld-kan/agentools.git
-cd agentools
+git@github.com:datascienceworld-kan/agentcore.git
+cd agentcore
 pip install -r requirements.txt
 poetry install
 ```
 
-To use a list of default tools inside [agentools.tools](agentools/tools/) you should set environment varibles inside `.env` including `TOGETHER_API_KEY` to use llm models at [togetherai](https://api.together.ai/signin) site and `TAVILY_API_KEY` to use tavily websearch tool at [tavily](https://app.tavily.com/home) site:
+To use a list of default tools inside [agentcore.tools](agentcore/tools/) you should set environment varibles inside `.env` including `TOGETHER_API_KEY` to use llm models at [togetherai](https://api.together.ai/signin) site and `TAVILY_API_KEY` to use tavily websearch tool at [tavily](https://app.tavily.com/home) site:
 
 ```
 TOGETHER_API_KEY="Your together API key"
@@ -25,12 +25,12 @@ Let's create your acounts first and then create your relevant key for each websi
 
 # 2. Set up Agent
 
-`agentools` is a flexible library for creating intelligent agents. You can configure your agent with tools, each encapsulated in a Python module under `agentools.tools`. This provides a workspace of tools that agents can use to interact with and operate in the realistic world. Each tool is a Python file with full documentation and it can be independently ran. For example, the [agentools.tools.websearch_tools](agentools/tools/websearch_tools.py) module contains code for interacting with a search API.
+`agentcore` is a flexible library for creating intelligent agents. You can configure your agent with tools, each encapsulated in a Python module under `agentcore.tools`. This provides a workspace of tools that agents can use to interact with and operate in the realistic world. Each tool is a Python file with full documentation and it can be independently ran. For example, the [agentcore.tools.websearch_tools](agentcore/tools/websearch_tools.py) module contains code for interacting with a search API.
 
 
 ```python
 from langchain_together import ChatTogether 
-from agentools.agent.agent import Agent
+from agentcore.agent.agent import Agent
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -46,8 +46,10 @@ agent = Agent(
         "Deeply analyzing financial markets", 
         "Searching information about stock price",
         "Visualization about stock price"],
-    tools = ['agentools.tools.websearch_tools',
-             'agentools.tools.yfinance_tools']
+    tools = ['agentcore.tools.websearch_tools',
+             'agentcore.tools.yfinance_tools'],
+    tools_path = 'templates/tools.json' # Place to save tools. Default is 'templates/tools.json',
+    is_reset_tools = True # If True, will reset tools every time. Default is False
 )
 
 # Step 2: invoke the agent
@@ -113,7 +115,7 @@ Function tools are registered directly in your runtime code by decorating them w
 
 
 ```python
-from agentools.register.tool import function_tool
+from agentcore.register.tool import function_tool
 from typing import List
 
 @function_tool
@@ -136,11 +138,11 @@ ToolMessage(content="Completed executing tool sum_of_series({'x': [1, 2, 3, 4, 5
 
 ## 4.1. Deep Search
 
-With agentools, you can invent a complex workflow by combining multiple tools into a single agent. This allows you to create a more sophisticated and flexible agent that can adapt to different task. Let's see how an agent can be created to help with financial analysis by using `deepsearch` tool, which allows you to search for information in a structured manner. This tool is particularly useful for tasks that require a deep understanding of the data and the ability to navigate through complex information.
+With agentcore, you can invent a complex workflow by combining multiple tools into a single agent. This allows you to create a more sophisticated and flexible agent that can adapt to different task. Let's see how an agent can be created to help with financial analysis by using `deepsearch` tool, which allows you to search for information in a structured manner. This tool is particularly useful for tasks that require a deep understanding of the data and the ability to navigate through complex information.
 
 ```
 from langchain_together import ChatTogether 
-from agentools.agent.agent import Agent
+from agentcore.agent import Agent
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -155,7 +157,7 @@ agent = Agent(
         "Deeply analyzing financial markets", 
         "Searching information about stock price",
         "Visualization about stock price"],
-    tools = ['agentools.tools.deepsearch']
+    tools = ['agentcore.tools.deepsearch']
 )
     
 message = agent.invoke("Let's analyze Tesla stock in 2025?")
@@ -164,15 +166,15 @@ print(message.artifact)
 
 [![Watch the video](https://img.youtube.com/vi/MUOg7MYGUzE/0.jpg)](https://youtu.be/MUOg7MYGUzE)
 
-The output is available at [agentools/examples/deepsearch.md](agentools/examples/deepsearch.md)
+The output is available at [agentcore/examples/deepsearch.md](agentcore/examples/deepsearch.md)
 
 ## 4.2. Trending Search
 
-Exceptionally, Agentools also offers a feature to summarize and highlight the top daily news on the internet based on any topic you are looking for, regardless of the language used. This is achieved by using the `trending_news` tool.
+Exceptionally, agentcore also offers a feature to summarize and highlight the top daily news on the internet based on any topic you are looking for, regardless of the language used. This is achieved by using the `trending_news` tool.
 
 ```
 from langchain_together import ChatTogether 
-from agentools.agent.agent import Agent
+from agentcore.agent.agent import Agent
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -186,7 +188,7 @@ agent = Agent(
     skills = [
         "Searching the trending news on realtime from google news",
         "Deeply analyzing top trending news"],
-    tools = ['agentools.tools.trending_news']
+    tools = ['agentcore.tools.trending_news']
 )
     
 message = agent.invoke("Tìm 5 tin tức nổi bật về tình hình giá vàng sáng hôm nay")
@@ -195,11 +197,104 @@ print(message.artifact)
 
 [![Watch the video](https://img.youtube.com/vi/c8ylwGDYl2c/0.jpg)](https://youtu.be/c8ylwGDYl2c?si=D7aMgY5f_WJqPbFm)
 
-The output is available at [agentools/examples/todaytrend.md](agentools/examples/todaytrend.md)
+The output is available at [agentcore/examples/todaytrend.md](agentcore/examples/todaytrend.md)
 
 
-# 5. License
-`agentools` is released under the MIT License. You are free to use, modify, and distribute the code for both commercial and non-commercial purposes.
+# 5. Agent with Memory (>=0.1.2)
 
-# 6. Contributing
-We welcome contributions from the community. If you would like to contribute, please read our [Contributing Guide](https://github.com/datascienceworld-kan/agentools/blob/main/CONTRIBUTING.md). If you have any questions or need help, feel free to join [Discord Channel](https://discord.com/channels/1036147288994758717/1358017320970358864).
+There is a special upgradation from version 0.1.2 that allows to adhere Memory for each Agent. This is useful when you want to keep track of the user's behavior and conceptualize them as a knowledge graph for the agent. Therefore, it helps agent become more intelligent and capable of understanding personality and responding to user queries with greater accuracy.
+
+The following code to save each conversation into short-memory.
+
+```
+from langchain_together.chat_models import ChatTogether
+from dotenv import load_dotenv
+from agentcore.memory import Memory
+
+load_dotenv()
+
+llm = ChatTogether(
+    model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+)
+
+memory = Memory(
+    memory_path="templates/memory.jsonl",
+    is_reset_memory=True, # will reset the memory every time the agent is invoked
+    is_logging=True
+)
+
+text_input = """Hi, my name is Kan. I was born in Thanh Hoa Province, Vietnam, in 1993.
+My motto is: "Make the world better with data and models". That’s why I work as an AI Solution Architect at FPT Software and as an AI lecturer at NEU.
+I began my journey as a gifted student in Mathematics at the High School for Gifted Students, VNU University, where I developed a deep passion for Math and Science.
+Later, I earned an Excellent Bachelor's Degree in Applied Mathematical Economics from NEU University in 2015. During my time there, I became the first student from the Math Department to win a bronze medal at the National Math Olympiad.
+I have been working as an AI Solution Architect at FPT Software since 2021.
+I have been teaching AI and ML courses at NEU university since 2022.
+I have conducted extensive research on Reliable AI, Generative AI, and Knowledge Graphs at FPT AIC.
+I was one of the first individuals in Vietnam to win a paper award on the topic of Generative AI and LLMs at the Nvidia GTC Global Conference 2025 in San Jose, USA.
+I am the founder of DataScienceWorld.Kan, an AI learning hub offering high-standard AI/ML courses such as Build Generative AI Applications and MLOps – Machine Learning in Production, designed for anyone pursuing a career as an AI/ML engineer.
+Since 2024, I have participated in Google GDSC and Google I/O as a guest speaker and AI/ML coach for dedicated AI startups.
+"""
+
+memory.save_short_term_memory(llm, text_input)
+memory_message = memory.load_memory('string')
+memory_message
+```
+
+```
+Kan -> BORN_IN[in 1993] -> Thanh Hoa Province, Vietnam
+Kan -> WORKS_FOR[since 2021] -> FPT Software
+Kan -> WORKS_FOR[since 2022] -> NEU
+Kan -> STUDIED_AT -> High School for Gifted Students, VNU University
+Kan -> STUDIED_AT[graduated in 2015] -> NEU University
+Kan -> RESEARCHED_AT -> FPT AIC
+Kan -> RECEIVED_AWARD[at Nvidia GTC Global Conference 2025] -> paper award on Generative AI and LLMs
+Kan -> FOUNDED -> DataScienceWorld.Kan
+Kan -> PARTICIPATED_IN[since 2024] -> Google GDSC
+Kan -> PARTICIPATED_IN[since 2024] -> Google I/O
+DataScienceWorld.Kan -> OFFERS -> Build Generative AI Applications
+DataScienceWorld.Kan -> OFFERS -> MLOps – Machine Learning in Production
+Kan -> OWNS -> house
+Kan -> OWNS -> garden
+Kan -> HAS_MOTTO -> stay hungry and stay foolish
+Kan -> RECEIVED_AWARD_AT[in 2025] -> Nvidia GTC Global Conference
+```
+
+To adhere Memmory to each Agent
+
+```
+import os
+import sys
+from langchain_together import ChatTogether 
+from agentcore.agent import Agent
+from agentcore.memory.memory import Memory
+from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv()
+
+llm = ChatTogether(
+    model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+)
+
+# Step 1: Create Agent with tools
+agent = Agent(
+    llm = llm,
+    description="You are my close friend",
+    skills=[
+        "You can remember all memory related to us",
+        "You can remind the memory to answer questions",
+        "You can remember the history of our relationship"
+    ],
+    memory_path=Path('templates/memory.json'),
+    is_reset_memory=True # Will reset memory each time re-initialize agent. Default is False
+)
+
+# Step 2: invoke the agent
+message = agent.invoke("Hello how are you?")
+message.content
+```
+
+# 6. License
+`agentcore` is released under the MIT License. You are free to use, modify, and distribute the code for both commercial and non-commercial purposes.
+
+# 7. Contributing
+We welcome contributions from the community. If you would like to contribute, please read our [Contributing Guide](https://github.com/datascienceworld-kan/agentcore/blob/main/CONTRIBUTING.md). If you have any questions or need help, feel free to join [Discord Channel](https://discord.com/channels/1036147288994758717/1358017320970358864).

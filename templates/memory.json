@@ -1,0 +1,124 @@
+{
+    "Kan": [
+        {
+            "head": "Kan",
+            "head_type": "Person",
+            "relation": "BORN_IN",
+            "relation_properties": "in 1993",
+            "tail": "Thanh Hoa Province, Vietnam",
+            "tail_type": "Location"
+        },
+        {
+            "head": "Kan",
+            "head_type": "Person",
+            "relation": "WORKS_FOR",
+            "relation_properties": "since 2021",
+            "tail": "FPT Software",
+            "tail_type": "Company"
+        },
+        {
+            "head": "Kan",
+            "head_type": "Person",
+            "relation": "WORKS_FOR",
+            "relation_properties": "since 2022",
+            "tail": "NEU",
+            "tail_type": "University"
+        },
+        {
+            "head": "Kan",
+            "head_type": "Person",
+            "relation": "STUDIED_AT",
+            "relation_properties": "",
+            "tail": "High School for Gifted Students, VNU University",
+            "tail_type": "School"
+        },
+        {
+            "head": "Kan",
+            "head_type": "Person",
+            "relation": "STUDIED_AT",
+            "relation_properties": "graduated in 2015",
+            "tail": "NEU University",
+            "tail_type": "University"
+        },
+        {
+            "head": "Kan",
+            "head_type": "Person",
+            "relation": "RESEARCHED_AT",
+            "relation_properties": "",
+            "tail": "FPT AIC",
+            "tail_type": "Institution"
+        },
+        {
+            "head": "Kan",
+            "head_type": "Person",
+            "relation": "RECEIVED_AWARD",
+            "relation_properties": "in 2025",
+            "tail": "Nvidia GTC Global Conference",
+            "tail_type": "Conference"
+        },
+        {
+            "head": "Kan",
+            "head_type": "Person",
+            "relation": "FOUNDED",
+            "relation_properties": "",
+            "tail": "DataScienceWorld.Kan",
+            "tail_type": "Organization"
+        },
+        {
+            "head": "Kan",
+            "head_type": "Person",
+            "relation": "PARTICIPATED_IN",
+            "relation_properties": "since 2024",
+            "tail": "Google GDSC",
+            "tail_type": "Event"
+        },
+        {
+            "head": "Kan",
+            "head_type": "Person",
+            "relation": "PARTICIPATED_IN",
+            "relation_properties": "since 2024",
+            "tail": "Google I/O",
+            "tail_type": "Event"
+        },
+        {
+            "head": "Kan",
+            "head_type": "Person",
+            "relation": "HAS_MOTTO",
+            "relation_properties": "",
+            "tail": "Make the world better with data and models",
+            "tail_type": "Motto"
+        },
+        {
+            "head": "Kan",
+            "head_type": "Person",
+            "relation": "CONDUCTED_RESEARCH_ON",
+            "relation_properties": "",
+            "tail": "Reliable AI",
+            "tail_type": "Research Topic"
+        },
+        {
+            "head": "Kan",
+            "head_type": "Person",
+            "relation": "CONDUCTED_RESEARCH_ON",
+            "relation_properties": "",
+            "tail": "Generative AI",
+            "tail_type": "Research Topic"
+        },
+        {
+            "head": "Kan",
+            "head_type": "Person",
+            "relation": "CONDUCTED_RESEARCH_ON",
+            "relation_properties": "",
+            "tail": "Knowledge Graphs",
+            "tail_type": "Research Topic"
+        },
+        {
+            "head": "Kan",
+            "head_type": "Person",
+            "relation": "RECEIVED_AWARD_AT",
+            "relation_properties": "in 2025",
+            "tail": "Nvidia GTC Global Conference",
+            "tail_type": "Conference"
+        }
+    ]
+}
