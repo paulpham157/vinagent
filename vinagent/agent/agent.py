@@ -1,17 +1,21 @@
+import asyncio
 import json
 import importlib
 from abc import ABC, abstractmethod
-from typing import Any, Awaitable, List, Optional
+from typing import Any, Awaitable, List, Optional, AsyncGenerator
 from langchain_together import ChatTogether
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_openai.chat_models.base import BaseChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.messages.tool import ToolMessage
+from langchain_core.messages.ai import AIMessageChunk
+from langchain_core.tools import BaseTool, StructuredTool, ToolException
 import logging
 from pathlib import Path
 from typing import Union
 from vinagent.register.tool import ToolManager
 from vinagent.memory.memory import Memory
+from vinagent.mcp.client import DistributedMCPClient
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -25,7 +29,7 @@ class AgentMeta(ABC):
     def __init__(
         self,
         llm: Union[ChatTogether, BaseLanguageModel, BaseChatOpenAI],
-        tools: List = [],
+        tools: List[Union[str, BaseTool]] = [],
         *args,
         **kwargs,
     ):
@@ -38,23 +42,40 @@ class AgentMeta(ABC):
         pass
 
     @abstractmethod
-    async def invoke_async(self, query: str, *args, **kwargs) -> Awaitable[Any]:
+    async def ainvoke(self, query: str, *args, **kwargs) -> Awaitable[Any]:
         """Asynchronously invoke the agent's main function"""
         pass
 
+def is_jupyter_notebook():
+    try:
+        from IPython import get_ipython
+        ipython = get_ipython()
+        if ipython is None:
+            return False
+        # Check if it's a Jupyter Notebook (ZMQInteractiveShell is used in Jupyter)
+        return 'ZMQInteractiveShell' in str(type(ipython))
+    except ImportError:
+        return False
+
+if is_jupyter_notebook():
+    import nest_asyncio
+    nest_asyncio.apply()
 
 class Agent(AgentMeta):
     """Concrete implementation of an AI agent with tool-calling capabilities"""
     def __init__(
         self,
         llm: Union[ChatTogether, BaseLanguageModel, BaseChatOpenAI],
-        tools: List = [],
+        tools: List[Union[str, BaseTool]] = [],
         tools_path: Path = Path("templates/tools.json"),
         is_reset_tools = False,
         description: str = "You are a helpful assistant who can use the following tools to complete a task.",
         skills: list[str] = ["You can answer the user question with tools"],
         memory_path: Path = None,
         is_reset_memory = False,
+        mcp_client: DistributedMCPClient = None,
+        mcp_server_name: str = None,
+        is_pii: bool = False,
         *args,
         **kwargs,
     ):
@@ -86,6 +107,13 @@ class Agent(AgentMeta):
         is_reset_memory : bool, optional
             A flag indicating whether the agent should reset its memory when re-initializes it's memory. Defaults to False. Only valid if memory is not None.
 
+        mcp_client : DistributedMCPClient, optional
+            An instance of a DistributedMCPClient used to register tools with the memory. Defaults to None.
+        
+        mcp_name: str, optional
+            The name of the memory server. Defaults to None.
+        is_pii: bool, optional
+            A flag indicating whether the assistant should be able to recognize person who is chatting with. Defaults to False.
         *args, **kwargs : Any
             Additional arguments passed to the superclass or future extensions.
         """
@@ -104,24 +132,40 @@ class Agent(AgentMeta):
         self.tools_manager = ToolManager(tools_path=self.tools_path, is_reset_tools=self.is_reset_tools)
 
         self.register_tools(self.tools)
+        self.mcp_client = mcp_client
+        self.mcp_server_name = mcp_server_name
+        
         if memory_path and (not memory_path.endswith(".json")):
             raise ValueError("memory_path must be json format ending with .json. For example, 'templates/memory.json'")
         self.memory_path = Path(memory_path) if isinstance(memory_path, str) else memory_path
         self.is_reset_memory = is_reset_memory
         self.memory = None
         if self.memory_path:
-            self.memory =Memory(
+            self.memory = Memory(
                 memory_path=self.memory_path,
                 is_reset_memory=self.is_reset_memory
             )
+        self.is_pii = is_pii
         self._user_id = None
-        
+        if not self.is_pii:
+            self._user_id = 'unknown_user'
+    
+    async def connect_mcp_tool(self):
+        logger.info(f"{self.mcp_client}: {self.mcp_server_name}")
+        if self.mcp_client and self.mcp_server_name:
+            mcp_tools = await self.tools_manager.register_mcp_tool(self.mcp_client, self.mcp_server_name)
+            logger.info(f"Successfully connected to mcp server {self.mcp_server_name}!")
+        elif self.mcp_client:
+            mcp_tools = await self.tools_manager.register_mcp_tool(self.mcp_client)
+            logger.info(f"Successfully connected to mcp server!")
+        return "Successfully connected to mcp server!"
+    
     def register_tools(self, tools: List[str]) -> Any:
         """
         Register a list of tools
         """
         for tool in tools:
-            self.tools_manager.register_tool(tool)
+            self.tools_manager.register_module_tool(tool)
 
     @property
     def user_id(self):
@@ -131,46 +175,54 @@ class Agent(AgentMeta):
     def user_id(self, new_user_id):
         self._user_id = new_user_id
 
-    def invoke(self, query: str, is_save_memory: bool = False, user_id: str = "unknown_user", *args, **kwargs) -> Any:
-        """
-        Select and execute a tool based on the task description
-        """
-        if self._user_id:
-            pass
-        elif user_id == "unknown_user": # User forgot input their name
-            self._user_id=input("You forgot clarifying your name. Input user_id:")
-        else: # user clarify their name
-            self._user_id=user_id
-        logger.info(f"I'am chatting with {self._user_id}")
 
+    def prompt_template(self, query: str, user_id: str = "unknown_user", *args, **kwargs) -> str:
         try:
             tools = json.loads(self.tools_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             tools = {}
             self.tools_path.write_text(json.dumps({}, indent=4), encoding="utf-8")
         
+        if self.memory:
+            memory = f"- Memory: {self.memory.load_memory(load_type='string', user_id=user_id)}\n"
+        else:
+            memory = ""
+
         prompt = (
             "You are given a task, a list of available tools, and the memory about user to have precise information.\n"
             f"- Task: {query}\n"
             f"- Tools list: {json.dumps(tools)}\n"
-            f"- Memory: \n{self.memory.load_memory(load_type='string', user_id=self._user_id) if self.memory else ''}\n"
-            f"- User: {self._user_id}\n"
+            f"{memory}\n"
+            f"- User: {user_id}\n"
             "------------------------\n"    
             "Instructions:\n"
-            "- Let's answer in a natural, clear, and detailed way without providing reasoning or explanation."
-            "- If user used I in Memory, let's replace by name {self._user_id} in User part."
-            "- You need to think about whether the question need to use Tools?"
+            "- Let's answer in a natural, clear, and detailed way without providing reasoning or explanation.\n"
+            f"- If user used I in Memory, let's replace by name {user_id} in User part.\n"
+            "- You need to think about whether the question need to use Tools?\n"
             "- If it was daily normal conversation. Let's directly answer as a human with memory.\n"
             "- If the task requires a tool, select the appropriate tool with its relevant arguments from Tools list according to following format (no explanations, no markdown):\n"
             "{\n"
             '"tool_name": "Function name",\n'
+            '"tool_type": "Type of tool. Only get one of three values ["function", "module", "mcp"]"\n'
             '"arguments": "A dictionary of keyword-arguments to execute tool_name",\n'
             '"module_path": "Path to import the tool"\n'
             "}\n"
             "Let's say I don't know and suggest where to search if you are unsure the answer.\n"
             "Not make up anything.\n"
         )
-        
+        return prompt
+
+    def invoke(self, query: str, is_save_memory: bool = False, user_id: str = "unknown_user", *args, **kwargs) -> Any:
+        """
+        Select and execute a tool based on the task description
+        """
+        if self._user_id:
+            pass
+        else: # user clarify their name
+            self._user_id=user_id
+        logger.info(f"I'am chatting with {self._user_id}")
+
+        prompt = self.prompt_template(query=query, user_id=self._user_id)
         skills = "- ".join(self.skills)
         messages = [
             SystemMessage(content=f"{self.description}\nHere is your skills: {skills}"),
@@ -182,66 +234,135 @@ class Agent(AgentMeta):
 
         try:
             response = self.llm.invoke(messages)
-            tool_data = self.tools_manager.extract_json(response.content)
-
+            tool_data = self.tools_manager.extract_tool(response.content)
             if not tool_data or ("None" in tool_data) or (tool_data == "{}"):
                 return response
-
+            
             tool_call = json.loads(tool_data)
-            return self._execute_tool(
-                tool_call["tool_name"], tool_call["arguments"], tool_call["module_path"]
+            logging.info(tool_call)
+            tool_message = asyncio.run(
+                self.tools_manager._execute_tool(
+                    tool_name=tool_call["tool_name"],
+                    tool_type=tool_call["tool_type"], 
+                    arguments=tool_call["arguments"],
+                    module_path=tool_call["module_path"],
+                    mcp_client=self.mcp_client,
+                    mcp_server_name=self.mcp_server_name
+                )
             )
+
+            self.save_memory(tool_message=tool_message, user_id=self._user_id)
+            return tool_message
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logger.error(f"Tool calling failed: {str(e)}")
             return None
 
-    async def invoke_async(self, *args, **kwargs) -> Awaitable[Any]:
-        """Asynchronously invoke the agent's LLM"""
-        return await self.llm.ainvoke(*args, **kwargs)
+    def stream(self, query: str, is_save_memory: bool = False, user_id: str = "unknown_user", *args, **kwargs) -> AsyncGenerator[Any, None]:
+        """
+        Select and execute a tool based on the task description, using streaming.
+        Yields streamed responses or the final tool execution result.
+        """
+        if not self._user_id:
+            self._user_id = user_id
+        logger.info(f"I am chatting with {self._user_id}")
 
-    def _execute_tool(self, tool_name: str, arguments: dict, module_path: str) -> Any:
-        """Execute the specified tool with given arguments"""
-        # If function is directly registered by decorator @function_tool. Access it on runtime context.
-        registered_functions = self.tools_manager.load_tools()
+        prompt = self.prompt_template(query=query, user_id=self._user_id)
+        skills = "- ".join(self.skills)
+        messages = [
+            SystemMessage(content=f"{self.description}\nHere is your skills: {skills}"),
+            HumanMessage(content=prompt),
+        ]
 
-        if (
-            module_path == "__runtime__"
-            and tool_name in self.tools_manager._registered_functions
-        ):
-            func = self.tools_manager._registered_functions[tool_name]
-            content = f"Completed executing tool {tool_name}({arguments})"
-            logger.info(content)
-            artifact = func(**arguments)
-            tool_call_id = registered_functions[tool_name]["tool_call_id"]
-            message = ToolMessage(
-                content=content, artifact=artifact, tool_call_id=tool_call_id
+        if self.memory and is_save_memory:
+            self.memory.save_short_term_memory(self.llm, query, user_id=self._user_id)
+
+        try:
+            # Accumulate streamed content
+            full_content = AIMessageChunk(content="")
+            for chunk in self.llm.stream(messages):
+                # Assuming chunk is a string or has a 'content' attribute
+                full_content += chunk
+                yield chunk  # Yield each chunk to the caller for real-time streaming
+
+            # After streaming is complete, process tool data
+            tool_data = self.tools_manager.extract_tool(full_content.content)
+            if not tool_data or "None" in tool_data or tool_data == "{}":
+                yield full_content  # Return the full content if no tool is called
+                return
+
+            # Parse and execute tool
+            tool_call = json.loads(tool_data)
+            logger.info(f"Tool call: {tool_call}")
+            tool_message = asyncio.run(
+                self.tools_manager._execute_tool(
+                    tool_name=tool_call["tool_name"],
+                    tool_type=tool_call["tool_type"], 
+                    arguments=tool_call["arguments"],
+                    module_path=tool_call["module_path"],
+                    mcp_client=self.mcp_client,
+                    mcp_server_name=self.mcp_server_name
+                )
             )
-            return message
 
-        # If function is imported from a module, access it on module path.
-        # try:
-        if tool_name in globals():
-            return globals()[tool_name](**arguments)
+            self.save_memory(tool_message=tool_message, user_id=self._user_id)
+            yield tool_message  # Yield the final tool execution result
 
-        module = importlib.import_module(module_path, package=__package__)
-        func = getattr(module, tool_name)
-        artifact = func(**arguments)
-        content = f"Completed executing tool {tool_name}({arguments})"
-        logger.info(content)
-        tool_call_id = registered_functions[tool_name]["tool_call_id"]
-        message = ToolMessage(
-            content=content, artifact=artifact, tool_call_id=tool_call_id
-        )
-        # if self.memory and isinstance(message.artifact, str):
-        #     logging.info(message.artifact)
-        #     self.memory.save_short_term_memory(self.llm, message.artifact)
-        # else:
-        #     logging.info(message.artifact)
-        #     self.memory.save_short_term_memory(self.llm, message.content)
-        return message
-        # except (ImportError, AttributeError) as e:
-        #     logger.error(f"Error executing tool {tool_name}: {str(e)}")
-        #     return None
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            logger.error(f"Tool calling failed: {str(e)}")
+            yield None  # Yield None to indicate failure
+            return
 
+    async def ainvoke(self, query: str, is_save_memory: bool = False, user_id: str = "unknown_user", *args, **kwargs) -> Any:
+        """
+        Select and execute a tool based on the task description
+        """
+        if self._user_id:
+            pass
+        else: # user clarify their name
+            self._user_id=user_id
+        logger.info(f"I'am chatting with {self._user_id}")
+
+        prompt = self.prompt_template(query=query, user_id=self._user_id)
+        skills = "- ".join(self.skills)
+        messages = [
+            SystemMessage(content=f"{self.description}\nHere is your skills: {skills}"),
+            HumanMessage(content=prompt),
+        ]
+
+        if self.memory and is_save_memory:
+            self.memory.save_short_term_memory(self.llm, query, user_id=self._user_id)
+
+        try:
+            response = await self.llm.ainvoke(messages)
+            tool_data = self.tools_manager.extract_tool(response.content)
+            if not tool_data or ("None" in tool_data) or (tool_data == "{}"):
+                return response
+            
+            tool_call = json.loads(tool_data)
+            tool_message = await self.tools_manager._execute_tool(
+                tool_name=tool_call["tool_name"],
+                tool_type=tool_call["tool_type"], 
+                arguments=tool_call["arguments"],
+                module_path=tool_call["module_path"],
+                mcp_client=self.mcp_client,
+                mcp_server_name=self.mcp_server_name
+            )
+
+            self.save_memory(tool_message=tool_message, user_id=self._user_id)
+            return tool_message
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            logger.error(f"Tool calling failed: {str(e)}")
+            return None
+
+    def save_memory(self, tool_message: ToolMessage, user_id: str = "unknown_user") -> None:
+        """
+        Save the tool message to the memory
+        """
+        if self.memory and isinstance(tool_message.artifact, str):
+            self.memory.save_short_term_memory(self.llm, tool_message.artifact, user_id=user_id)
+        else:
+            logger.info(tool_message.artifact)
+            self.memory.save_short_term_memory(self.llm, tool_message.content, user_id=user_id)
+                                               
     def function_tool(self, func: Any):
-        return self.tools_manager.function_tool(func)
+        return self.tools_manager.register_function_tool(func)
