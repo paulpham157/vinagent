@@ -13,6 +13,7 @@ from .initialize import llm
 from vinagent.mcp import load_mcp_tools
 from vinagent.mcp.client import DistributedMCPClient
 from langchain_core.messages.tool import ToolMessage
+import asyncio
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -246,7 +247,8 @@ class FunctionTool:
         if tool_name in tool_manager._registered_functions:
             try:
                 func = tool_manager._registered_functions[tool_name]
-                artifact = await func(**arguments)
+                # artifact = await func(**arguments)
+                artifact = await asyncio.to_thread(func, **arguments)
                 content = f"Completed executing function tool {tool_name}({arguments})"
                 logger.info(content)
                 tool_call_id = registered_functions[tool_name]["tool_call_id"]
@@ -257,7 +259,8 @@ class FunctionTool:
             except Exception as e:
                 content = f"Failed to execute function tool {tool_name}({arguments}): {str(e)}"
                 logger.error(content)
-                raise {"error": content}
+                # raise {"error": content}
+                return content
 
 
 class MCPTool:
@@ -278,11 +281,12 @@ class MCPTool:
             }
             try:
                 # Send the request to the MCP server
+                # response = await session.call_tool(**payload)
                 response = await session.call_tool(**payload)
                 content = f"Completed executing mcp tool {tool_name}({arguments})"
                 logger.info(content)
                 tool_call_id = registered_functions[tool_name]["tool_call_id"]
-                artifact = response.content
+                artifact = response
                 message = ToolMessage(
                     content=content, artifact=artifact, tool_call_id=tool_call_id
                 )
@@ -290,7 +294,8 @@ class MCPTool:
             except Exception as e:
                 content = f"Failed to execute mcp tool {tool_name}({arguments}): {str(e)}"
                 logger.error(content)
-                raise {"error": content}
+                # raise {"error": content}
+                return content
 
 
 class ModuleTool:
@@ -299,7 +304,7 @@ class ModuleTool:
             tool_manager: ToolManager,
             tool_name: str, 
             arguments: Dict[str, Any], 
-            module_path: Union[str, Path]):
+            module_path: Union[str, Path], *arg, **kwargs):
         
         registered_functions = tool_manager.load_tools()
         try:
@@ -308,7 +313,8 @@ class ModuleTool:
 
             module = importlib.import_module(module_path, package=__package__)
             func = getattr(module, tool_name)
-            artifact = await func(**arguments)
+            # artifact = await func(**arguments)
+            artifact = await asyncio.to_thread(func, **arguments)
             content = f"Completed executing module tool {tool_name}({arguments})"
             logger.info(content)
             tool_call_id = registered_functions[tool_name]["tool_call_id"]
@@ -319,4 +325,5 @@ class ModuleTool:
         except (ImportError, AttributeError) as e:
             content = f"Failed to execute module tool {tool_name}({arguments}): {str(e)}"
             logger.error(content)
-            raise {"error": content}
+            # raise {"error": content}
+            return content

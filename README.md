@@ -115,16 +115,23 @@ plot = agent.invoke("Let's visualize the return of Tesla stock in 2024?")
 ![png](asset/return_plot.png)
     
 
-# 3. Register function tool
+# 3. Register Tool
 
-Function tools are registered directly in your runtime code by decorating them with the @function_tool without saving them into python module files.
+Vinagent stands out for its flexibility in registering different types of tools, including:
 
+- Function tools: These are integrated directly into your runtime code using the @function_tool decorator, without the need to store them in separate Python module files.
+- Module tools: These are added via Python module files placed in the vinagent.tools directory. Once registered, the modules can be imported and used in your runtime environment.
+- MCP tools: These are tools registered through an [MCP (Model Context Protocol) server](https://github.com/modelcontextprotocol/servers), enabling external tool integration.
+
+## 3.1. Function Tool
+
+You can customize any function in your runtime code as a powerful tool by using the @function_tool decorator.
 
 ```python
 from vinagent.register.tool import function_tool
 from typing import List
 
-@function_tool
+@agent.function_tool # Note: agent must be initialized first
 def sum_of_series(x: List[float]):
     return f"Sum of list is {sum(x)}"
 ```
@@ -140,9 +147,131 @@ message
 ToolMessage(content="Completed executing tool sum_of_series({'x': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]})", tool_call_id='tool_56f40902-33dc-45c6-83a7-27a96589d528', artifact='Sum of list is 55')
 ```
 
-# 4. Advance Features
+## 3.2. Module Tool
+Many complex tools cannot be implemented within a single function. In such cases, organizing the tool as a python module becomes necessary. To support this, `vinagent` allows tools to be registered via python module files placed in the `vinagent.tools` directory. This approach makes it easier to manage and execute more sophisticated tasks. Once registered, these modules can be imported and used directly in the runtime environment.
 
-## 4.1. Deep Search
+```
+from langchain_together import ChatTogether 
+from vinagent.agent.agent import Agent
+from dotenv import load_dotenv
+load_dotenv()
+
+llm = ChatTogether(
+    model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+)
+
+agent = Agent(
+    description="You are a Web Search Expert",
+    llm = llm,
+    skills = [
+        "Search the information from internet", 
+        "Give an in-deepth report",
+        "Keep update with the latest news"
+    ],
+    tools = ['vinagent.tools.websearch_tools'],
+    tools_path = 'templates/tools.json' # Place to save tools. The default path is also 'templates/tools.json',
+    is_reset_tools = True # If True, will reset tools every time. Default is False
+)
+```
+
+## 3.3. MCP Tool
+
+MCP (model context protocal) is a new AI protocal offfered by Anthropic that allows any AI model to interact with any tools distributed acrooss different platforms. These tools are provided by platform's [MCP Server](https://github.com/modelcontextprotocol/servers). There are many MCP servers available out there such as `google drive, gmail, slack, notions, spotify, etc.`, and `vinagent` can be used to connect to these servers and execute the tools within the agent.
+
+You need to start a MCP server first. For example, start with [math MCP Server](vinagent/mcp/examples/math/README.md)
+
+```
+cd vinagent/mcp/examples/math
+mcp dev main.py
+```
+```
+⚙️ Proxy server listening on port 6277
+🔍 MCP Inspector is up and running at http://127.0.0.1:6274 🚀
+```
+
+Next, you need to register the MCP server in the agent. You can do this by adding the server's URL to the `tools` list of the agent's configuration.
+
+```
+from vinagent.mcp.client import DistributedMCPClient
+from vinagent.mcp import load_mcp_tools
+from vinagent.agent.agent import Agent
+from langchain_together import ChatTogether
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Step 1: Initialize LLM
+llm = ChatTogether(
+    model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+)
+
+# Step 2: Initialize MCP client for Distributed MCP Server
+client = DistributedMCPClient(
+            {
+                "math": {
+                    "command": "python",
+                    # Make sure to update to the full absolute path to your math_server.py file
+                    "args": ["vinagent/mcp/examples/math/main.py"],
+                    "transport": "stdio",
+                }
+             }
+        )
+server_name = "math"
+
+# Step 3: Initialize Agent
+agent = Agent(
+    description="You are a Trending News Analyst",
+    llm = llm,
+    skills = [
+        "You are Financial Analyst",
+        "Deeply analyzing financial news"],
+    tools = ['vinagent.tools.yfinance_tools'],
+    tools_path="templates/tools.json",
+    is_reset_tools=True,
+    mcp_client=client, # MCP Client
+    mcp_server_name=server_name, # MCP Server name to resgister. If not set, all tools from all MCP servers available
+)
+
+# Step 4: Register mcp_tools to agent
+mcp_tools = await agent.connect_mcp_tool()
+```
+
+```
+# Test sum
+agent.invoke("What is the sum of 1993 and 709?")
+```
+
+```
+# Test product
+agent.invoke("Let's multiply of 1993 and 709?")
+```
+
+# 4. Invoke and streaming
+
+## 4.1. Synchronous and Asynchronous Invocation
+Vinagent offers both synchronous (agent.invoke) and asynchronous (agent.ainvoke) invocation methods. While synchronous calls halt the main thread until a response is returned, asynchronous calls enable the main thread to proceed without waiting. In practice, asynchronous invocations can be up to twice as fast as synchronous ones.
+
+```
+# Synchronous invocation
+message = agent.invoke("What is the sum of 1993 and 709?")
+```
+
+```
+# Asynchronous invocation
+message = await agent.ainvoke("What is the sum of 1993 and 709?")
+```
+
+## 4.2. Streaming Invocation
+In addition to synchronous and asynchronous invocation, vinagent also supports streaming invocation. This means that the response is generated in real-time on token-by-token basis, allowing for a more interactive and responsive experience. To use streaming, simply use `agent.stream`:
+
+```
+for chunk in agent.stream("Where is the capital of the Vietnam?"):
+    print(chunk)
+```
+
+# 5. Advance Features
+
+## 5.1. Deep Search
 
 With vinagent, you can invent a complex workflow by combining multiple tools into a single agent. This allows you to create a more sophisticated and flexible agent that can adapt to different task. Let's see how an agent can be created to help with financial analysis by using `deepsearch` tool, which allows you to search for information in a structured manner. This tool is particularly useful for tasks that require a deep understanding of the data and the ability to navigate through complex information.
 
@@ -165,7 +294,7 @@ agent = Agent(
         "Visualization about stock price"],
     tools = ['vinagent.tools.deepsearch']
 )
-    
+
 message = agent.invoke("Let's analyze Tesla stock in 2025?")
 print(message.artifact)
 ```
@@ -174,7 +303,7 @@ print(message.artifact)
 
 The output is available at [vinagent/examples/deepsearch.md](vinagent/examples/deepsearch.md)
 
-## 4.2. Trending Search
+## 5.2. Trending Search
 
 Exceptionally, vinagent also offers a feature to summarize and highlight the top daily news on the internet based on any topic you are looking for, regardless of the language used. This is achieved by using the `trending_news` tool.
 
@@ -206,7 +335,7 @@ print(message.artifact)
 The output is available at [vinagent/examples/todaytrend.md](vinagent/examples/todaytrend.md)
 
 
-# 5. Agent with Memory
+# 6. Agent with Memory
 
 There is a special feature that allows to adhere Memory for each Agent. This is useful when you want to keep track of the user's behavior and conceptualize them as a knowledge graph for the agent. Therefore, it helps agent become more intelligent and capable of understanding personality and responding to user queries with greater accuracy.
 
@@ -290,7 +419,7 @@ agent = Agent(
         "You can remind the memory to answer questions",
         "You can remember the history of our relationship"
     ],
-    memory_path=Path('templates/memory.json'),
+    memory_path='templates/memory.json',
     is_reset_memory=True # Will reset memory each time re-initialize agent. Default is False
 )
 
@@ -299,8 +428,8 @@ message = agent.invoke("Hello how are you?")
 message.content
 ```
 
-# 6. License
+# 7. License
 `vinagent` is released under the MIT License. You are free to use, modify, and distribute the code for both commercial and non-commercial purposes.
 
-# 7. Contributing
+# 8. Contributing
 We welcome contributions from the community. If you would like to contribute, please read our [Contributing Guide](https://github.com/datascienceworld-kan/vinagent/blob/main/CONTRIBUTING.md). If you have any questions or need help, feel free to join [Discord Channel](https://discord.com/channels/1036147288994758717/1358017320970358864).

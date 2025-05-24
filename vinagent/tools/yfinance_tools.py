@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from typing import Optional
+# from requests_ratelimiter import LimiterSession, RequestRate, Limiter, Duration
 
 
 def fetch_stock_data(
@@ -25,6 +26,11 @@ def fetch_stock_data(
         pd.DataFrame: DataFrame containing historical stock prices.
     """
     try:
+        history_rate = RequestRate(1, Duration.SECOND)
+        # limiter = Limiter(history_rate)
+        # session = LimiterSession(limiter=limiter)
+        # session.headers['User-agent'] = 'tickerpicker/1.0'
+        # stock = yf.Ticker(symbol, session=session)
         stock = yf.Ticker(symbol)
         data = stock.history(start=start_date, end=end_date, interval=interval)
         if data.empty:
@@ -48,7 +54,7 @@ def visualize_stock_data(
     Args:
         symbol (str): Stock symbol (e.g., 'AAPL')
         start_date (str): Start date (YYYY-MM-DD)
-        end_date (str): End date (YYYY-MM-DD)
+        end_date (str): End date (YYYY-MM-DD). It must be greater than start_date.
         interval (str): Data interval ('1d', '1wk', '1mo')
     """
     # Fetch the data

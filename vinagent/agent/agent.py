@@ -251,6 +251,15 @@ class Agent(AgentMeta):
                 )
             )
 
+            prompt_tool=("You are a professional reporter. Your task is to deliver a clear and factual report that directly addresses the given question. Use the tool's name and result only to support your explanation. Do not fabricate any information or over-interpret the result."
+                f"- Question: {query}"
+                f"- Tool Used: {tool_call}"
+                f"- Result: {tool_message.artifact}"
+                "Report")
+            
+            message = self.llm.invoke(prompt_tool)
+            tool_message.content = message.content
+
             self.save_memory(tool_message=tool_message, user_id=self._user_id)
             return tool_message
         except (json.JSONDecodeError, KeyError, ValueError) as e:
@@ -303,6 +312,15 @@ class Agent(AgentMeta):
                     mcp_server_name=self.mcp_server_name
                 )
             )
+
+            prompt_tool=("You are a professional reporter. Your task is to deliver a clear and factual report that directly addresses the given question. Use the tool's name and result only to support your explanation. However, if the question is very simple, just need to directly answer the question. Do not fabricate any information or over-interpret the result."
+                f"- Question: {query}"
+                f"- Tool Used: {tool_call}"
+                f"- Result: {tool_message.artifact}"
+                "Report")
+            
+            message = self.llm.invoke(prompt_tool)
+            tool_message.content = message.content            
 
             self.save_memory(tool_message=tool_message, user_id=self._user_id)
             yield tool_message  # Yield the final tool execution result
@@ -361,7 +379,6 @@ class Agent(AgentMeta):
         if self.memory and isinstance(tool_message.artifact, str):
             self.memory.save_short_term_memory(self.llm, tool_message.artifact, user_id=user_id)
         else:
-            logger.info(tool_message.artifact)
             self.memory.save_short_term_memory(self.llm, tool_message.content, user_id=user_id)
                                                
     def function_tool(self, func: Any):

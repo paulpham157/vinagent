@@ -1,1 +1,26 @@
-{}
+{
+    "add": {
+        "tool_name": "add",
+        "arguments": {
+            "a": "integer",
+            "b": "integer"
+        },
+        "return": "content_and_artifact",
+        "docstring": "Add two numbers",
+        "module_path": "__mcp__",
+        "tool_type": "mcp",
+        "tool_call_id": "tool_e25d9a0c-ec8c-483b-ada7-70779a23c668"
+    },
+    "multiply": {
+        "tool_name": "multiply",
+        "arguments": {
+            "a": "integer",
+            "b": "integer"
+        },
+        "return": "content_and_artifact",
+        "docstring": "Multiply two numbers",
+        "module_path": "__mcp__",
+        "tool_type": "mcp",
+        "tool_call_id": "tool_088b618f-093b-4d29-a8ed-1836cd474486"
+    }
+}
