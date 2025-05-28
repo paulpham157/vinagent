@@ -433,3 +433,13 @@ message.content
 
 # 8. Contributing
 We welcome contributions from the community. If you would like to contribute, please read our [Contributing Guide](https://github.com/datascienceworld-kan/vinagent/blob/main/CONTRIBUTING.md). If you have any questions or need help, feel free to join [Discord Channel](https://discord.com/channels/1036147288994758717/1358017320970358864).
+
+# 9. Credits
+
+We acknowledge the contributions of previous open-source library and platform that inspired the development of `vinagent`:
+
+- [LangChain](https://github.com/langchain-ai/langchain) – for offering standardizing base classes.
+- [Langgraph](https://github.com/langchain-ai/langgraph) – for building workflow.
+- [LlamaIndex](https://github.com/jerryjliu/llama_index) – for advanced features like deepsearch, trending search.
+- [Together.ai](https://api.together.ai) – for providing a powerful and free generative AI models.
+- [Tavily](https://app.tavily.com) – for providing a powerful web search tool.
