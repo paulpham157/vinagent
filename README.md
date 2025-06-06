@@ -54,7 +54,7 @@ agent = Agent(
         "Visualization about stock price"],
     tools = ['vinagent.tools.websearch_tools',
              'vinagent.tools.yfinance_tools'],
-    tools_path = 'templates/tools.json' # Place to save tools. Default is 'templates/tools.json',
+    tools_path = 'templates/tools.json', # Place to save tools. Default is 'templates/tools.json'
     is_reset_tools = True # If True, will reset tools every time. Default is False
 )
 
@@ -428,13 +428,121 @@ message = agent.invoke("Hello how are you?")
 message.content
 ```
 
-# 7. License
+# 7. Design Agent flow 
+
+The Vinagent library enables the integration of workflows built upon the nodes and edges of LangGraph. What sets it apart is our major improvement in representing a LangGraph workflow through a more intuitive syntax for connecting nodes using the right shift operator (`>>`). All agent patterns such as ReAct, chain-of-thought, and reflection can be easily constructed using this simple and readable syntax.
+
+These are steps to create a workflow:
+
+1. Define General Nodes
+Create your workflow nodes by inheriting from the base Node class. Each node typically implements two methods:
+
+- `exec`: Executes the task associated with the node and returns a partial update to the shared state.
+
+- `branching` (optional): For conditional routing. It returns a string key indicating the next node to be executed.
+
+2. Connect Nodes with `>>` Operator
+Use the right shift operator (`>>`) to define transitions between nodes. For branching, use a dictionary to map conditions to next nodes.
+
+```
+from typing import Annotated, TypedDict
+from vinagent.graph.operator import FlowStateGraph, END, START
+from vinagent.graph.node import Node
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.utils.runnable import coerce_to_runnable
+
+# Define a reducer for message history
+def append_messages(existing: list, update: dict) -> list:
+    return existing + [update]
+
+# Define the state schema
+class State(TypedDict):
+    messages: Annotated[list[dict], append_messages]
+    sentiment: str
+
+# Optional config schema
+class ConfigSchema(TypedDict):
+    user_id: str
+
+# Define node classes
+class AnalyzeSentimentNode(Node):
+    def exec(self, state: State) -> dict:
+        message = state["messages"][-1]["content"]
+        sentiment = "negative" if "angry" in message.lower() else "positive"
+        return {"sentiment": sentiment}
+
+    def branching(self, state: State) -> str:
+        return "human_escalation" if state["sentiment"] == "negative" else "chatbot_response"
+
+class ChatbotResponseNode(Node):
+    def exec(self, state: State) -> dict:
+        return {"messages": {"role": "bot", "content": "Got it! How can I assist you further?"}}
+
+class HumanEscalationNode(Node):
+    def exec(self, state: State) -> dict:
+        return {"messages": {"role": "bot", "content": "I'm escalating this to a human agent."}}
+
+# Define the Agent with graph and flow
+class Agent:
+    def __init__(self):
+        self.checkpoint = MemorySaver()
+        self.graph = FlowStateGraph(State, config_schema=ConfigSchema)
+        self.analyze_sentiment_node = AnalyzeSentimentNode()
+        self.human_escalation_node = HumanEscalationNode()
+        self.chatbot_response_node = ChatbotResponseNode()
+
+        self.flow = [
+            self.analyze_sentiment_node >> {
+                "chatbot_response": self.chatbot_response_node,
+                "human_escalation": self.human_escalation_node
+            },
+            self.human_escalation_node >> END,
+            self.chatbot_response_node >> END
+        ]
+
+        self.compiled_graph = self.graph.compile(checkpointer=self.checkpoint, flow=self.flow)
+
+    def invoke(self, input_state: dict, config: dict) -> dict:
+        return self.compiled_graph.invoke(input_state, config)
+
+# Test the agent
+agent = Agent()
+input_state = {
+    "messages": {"role": "user", "content": "I'm really angry about this!"}
+}
+config = {"configurable": {"user_id": "123"}, "thread_id": "123"}
+result = agent.invoke(input_state, config)
+print(result)
+```
+
+Output:
+
+```
+{
+  'messages': [
+    {'role': 'user', 'content': "I'm really angry about this!"},
+    {'role': 'bot', 'content': "I'm escalating this to a human agent."}
+  ],
+  'sentiment': 'negative'
+}
+```
+
+We can visualize the graph workflow on jupyternotebook
+
+```
+agent.compiled_graph
+```
+
+![](asset/langgraph_output.png)
+
+
+# 8. License
 `vinagent` is released under the MIT License. You are free to use, modify, and distribute the code for both commercial and non-commercial purposes.
 
-# 8. Contributing
+# 9. Contributing
 We welcome contributions from the community. If you would like to contribute, please read our [Contributing Guide](https://github.com/datascienceworld-kan/vinagent/blob/main/CONTRIBUTING.md). If you have any questions or need help, feel free to join [Discord Channel](https://discord.com/channels/1036147288994758717/1358017320970358864).
 
-# 9. Credits
+# 10. Credits
 
 We acknowledge the contributions of previous open-source library and platform that inspired the development of `vinagent`:
 
