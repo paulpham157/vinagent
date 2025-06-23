@@ -15,6 +15,8 @@ import logging
 from pathlib import Path
 from typing import Union
 from typing_extensions import is_typeddict
+import mlflow
+from mlflow.entities import SpanType
 
 from vinagent.register.tool import ToolManager
 from vinagent.memory.memory import Memory
@@ -64,6 +66,9 @@ def is_jupyter_notebook():
 if is_jupyter_notebook():
     import nest_asyncio
     nest_asyncio.apply()
+
+mlflow.set_experiment("call-local-llm")
+mlflow.openai.autolog()
 
 class Agent(AgentMeta):
     """Concrete implementation of an AI agent with tool-calling capabilities"""
@@ -214,8 +219,9 @@ class Agent(AgentMeta):
             tools = {}
             self.tools_path.write_text(json.dumps({}, indent=4), encoding="utf-8")
         
-        if self.memory:
-            memory = f"- Memory: {self.memory.load_memory(load_type='string', user_id=user_id)}\n"
+        memory_content = self.memory.load_memory(load_type='string', user_id=user_id)
+        if self.memory and memory_content:
+            memory = f"- Memory: {memory_content}\n"
         else:
             memory = ""
 
@@ -238,10 +244,19 @@ class Agent(AgentMeta):
             '"arguments": "A dictionary of keyword-arguments to execute tool_name",\n'
             '"module_path": "Path to import the tool"\n'
             "}\n"
-            "Let's say I don't know and suggest where to search if you are unsure the answer.\n"
-            "Not make up anything.\n"
+            "- Let's say I don't know and suggest where to search if you are unsure the answer.\n"
+            "- Not make up anything.\n"
         )
         return prompt
+    
+    def prompt_tool(self, query: str, tool_call: str, tool_message: ToolMessage, *args, **kwargs) -> str:
+        tool_template=("You are a professional reporter. Your task is to deliver a clear and factual report that directly addresses the given question. Use the tool's name and result only to support your explanation. Do not fabricate any information or over-interpret the result.\n"
+            f"- Question: {query}\n"
+            f"- Tool Used: {tool_call}\n"
+            f"- Result: {tool_message.artifact}\n"
+            "Let's report:"
+        )
+        return tool_template
 
     def invoke(self, query: str, is_save_memory: bool = False, user_id: str = "unknown_user", **kwargs) -> Any:
         """
@@ -249,14 +264,14 @@ class Agent(AgentMeta):
         """
         if self._user_id:
             pass
-        else: # user clarify their name
+        if user_id: # user clarify their name
             self._user_id=user_id
         logger.info(f"I'am chatting with {self._user_id}")
 
         prompt = self.prompt_template(query=query, user_id=self._user_id)
-        skills = "- ".join(self.skills)
+        skills = "- " + "- ".join(self.skills)
         messages = [
-            SystemMessage(content=f"{self.description}\nHere is your skills: {skills}"),
+            SystemMessage(content=f"{self.description}\nHere is your skills:\n{skills}"),
             HumanMessage(content=prompt),
         ]
 
@@ -272,7 +287,7 @@ class Agent(AgentMeta):
                 try:
                     result = self.compiled_graph.invoke(input=query, config=config)
                     if self.memory and is_save_memory:
-                        self.save_memory(tool_message=result, user_id=self._user_id)
+                        self.save_memory(message=result, user_id=self._user_id)
                     return result
                 except ValueError as e:
                     logger.error(f"Error in compiled_graph.invoke: {e}")
@@ -295,16 +310,11 @@ class Agent(AgentMeta):
                     )
                 )
 
-                prompt_tool=("You are a professional reporter. Your task is to deliver a clear and factual report that directly addresses the given question. Use the tool's name and result only to support your explanation. Do not fabricate any information or over-interpret the result."
-                    f"- Question: {query}"
-                    f"- Tool Used: {tool_call}"
-                    f"- Result: {tool_message.artifact}"
-                    "Report")
-                
-                message = self.llm.invoke(prompt_tool)
-                tool_message.content = message.content
+                tool_template = self.prompt_tool(query, tool_call, tool_message)
+                message = self.llm.invoke(tool_template)
+                tool_message.content = "\n" + message.content
                 if self.memory and is_save_memory:
-                    self.save_memory(tool_message=tool_message, user_id=self._user_id)
+                    self.save_memory(message=tool_message, user_id=self._user_id)
                 return tool_message
             
         except (json.JSONDecodeError, KeyError, ValueError) as e:
@@ -321,9 +331,9 @@ class Agent(AgentMeta):
         logger.info(f"I am chatting with {self._user_id}")
 
         prompt = self.prompt_template(query=query, user_id=self._user_id)
-        skills = "- ".join(self.skills)
+        skills = "- " + "- ".join(self.skills)
         messages = [
-            SystemMessage(content=f"{self.description}\nHere is your skills: {skills}"),
+            SystemMessage(content=f"{self.description}\nHere is your skills:\n{skills}"),
             HumanMessage(content=prompt),
         ]
 
@@ -343,7 +353,7 @@ class Agent(AgentMeta):
                             result += v 
                             yield v
                 if self.memory and is_save_memory:
-                    self.save_memory(tool_message=result, user_id=self._user_id)
+                    self.save_memory(message=result, user_id=self._user_id)
                 yield result
             else:
                 # Accumulate streamed content
@@ -371,17 +381,11 @@ class Agent(AgentMeta):
                     )
                 )
 
-                prompt_tool=("You are a professional reporter. Your task is to deliver a clear and factual report that directly addresses the given question. Use the tool's name and result only to support your explanation. However, if the question is very simple, just need to directly answer the question. Do not fabricate any information or over-interpret the result."
-                    f"- Question: {query}"
-                    f"- Tool Used: {tool_call}"
-                    f"- Result: {tool_message.artifact}"
-                    "Report")
-                
-                message = self.llm.invoke(prompt_tool)
+                tool_template = self.prompt_tool(query, tool_call, tool_message)
+                message = self.llm.invoke(tool_template)
                 tool_message.content = "\n" + message.content            
-
                 if self.memory and is_save_memory:
-                    self.save_memory(tool_message=tool_message, user_id=self._user_id)
+                    self.save_memory(message=tool_message, user_id=self._user_id)
                 yield tool_message  # Yield the final tool execution result
 
         except (json.JSONDecodeError, KeyError, ValueError) as e:
@@ -399,9 +403,9 @@ class Agent(AgentMeta):
         logger.info(f"I'am chatting with {self._user_id}")
 
         prompt = self.prompt_template(query=query, user_id=self._user_id)
-        skills = "- ".join(self.skills)
+        skills = "- " + "- ".join(self.skills)
         messages = [
-            SystemMessage(content=f"{self.description}\nHere is your skills: {skills}"),
+            SystemMessage(content=f"{self.description}\nHere is your skills:\n{skills}"),
             HumanMessage(content=prompt),
         ]
 
@@ -416,7 +420,7 @@ class Agent(AgentMeta):
                     config = {"configurable": {"user_id": user_id}, "thread_id": "123"} # Default config
                 result = await self.compiled_graph.ainvoke(input=query, config=config)
                 if self.memory and is_save_memory:
-                    self.save_memory(tool_message=result, user_id=self._user_id)
+                    self.save_memory(message=result, user_id=self._user_id)
                 return result
             else:
                 response = await self.llm.ainvoke(messages)
@@ -434,7 +438,7 @@ class Agent(AgentMeta):
                     mcp_server_name=self.mcp_server_name
                 )
                 if self.memory and is_save_memory:
-                    self.save_memory(tool_message=tool_message, user_id=self._user_id)
+                    self.save_memory(message=tool_message, user_id=self._user_id)
                 return tool_message
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logger.error(f"Tool calling failed: {str(e)}")
