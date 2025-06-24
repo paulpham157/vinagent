@@ -67,9 +67,6 @@ if is_jupyter_notebook():
     import nest_asyncio
     nest_asyncio.apply()
 
-mlflow.set_experiment("call-local-llm")
-mlflow.openai.autolog()
-
 class Agent(AgentMeta):
     """Concrete implementation of an AI agent with tool-calling capabilities"""
     def __init__(
