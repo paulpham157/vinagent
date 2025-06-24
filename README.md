@@ -634,7 +634,7 @@ agent.compiled_graph
 
 ![](asset/langgraph_function_output.png)
 
-# 10. Agent Chasing and Observability
+# 10. Agent Observability
 
 Vinagent provides a local server that can be used to visualize the workflow and debug the agent. We leverage mlflow observability to track the agent's progress and performance. To use the local server, run the following command:
 
