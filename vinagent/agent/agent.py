@@ -129,35 +129,41 @@ class Agent(AgentMeta):
             The name of the memory server. Defaults to None.
 
         is_pii: bool, optional
-            A flag indicating whether the assistant should be able to recognize person who is chatting with. Defaults to False.
+            A flag indicating whether the assistant should be able to recognize a person who is chatting with. Defaults to False.
         
         *args, **kwargs : Any
             Additional arguments passed to the superclass or future extensions.
         """
-
+        # Initialize Agent llm and tools
         self.llm = llm
         self.tools = tools
         self.description = description
         self.skills = skills
+        
+        # Initialize Agent flow by Langgraph
         self.flow = flow
         if self.flow:
             self.initialize_flow(state_schema=state_schema, config_schema=config_schema)
+        
+        # Initialize Tools
         self.tools_path = None
         if tools_path:
             self.tools_path = Path(tools_path) if isinstance(tools_path, str) else tools_path
         else:
             self.tools_path = Path("templates/tools.json")
-        
+        if self.tools_path and (self.tools_path.suffix != ".json"):
+            raise ValueError("tools_path must be json format ending with .json. For example, 'templates/tools.json'")
+        self.tools_path.parent.mkdir(parents=True, exist_ok=True)
         self.is_reset_tools = is_reset_tools
         self.tools_manager = ToolManager(tools_path=self.tools_path, is_reset_tools=self.is_reset_tools)
-
         self.register_tools(self.tools)
         self.mcp_client = mcp_client
         self.mcp_server_name = mcp_server_name
         
-        if memory_path and (not memory_path.endswith(".json")):
-            raise ValueError("memory_path must be json format ending with .json. For example, 'templates/memory.json'")
+        # Initialize memory
         self.memory_path = Path(memory_path) if isinstance(memory_path, str) else memory_path
+        if self.memory_path and (self.memory_path.suffix != ".json"):
+            raise ValueError("memory_path must be json format ending with .json. For example, 'templates/memory.json'")
         self.is_reset_memory = is_reset_memory
         self.memory = None
         if self.memory_path:
@@ -165,6 +171,8 @@ class Agent(AgentMeta):
                 memory_path=self.memory_path,
                 is_reset_memory=self.is_reset_memory
             )
+        
+        # Identify user
         self.is_pii = is_pii
         self._user_id = None
         if not self.is_pii:
@@ -219,12 +227,12 @@ class Agent(AgentMeta):
             tools = {}
             self.tools_path.write_text(json.dumps({}, indent=4), encoding="utf-8")
         
-        memory_content = self.memory.load_memory(load_type='string', user_id=user_id)
-        if self.memory and memory_content:
-            memory = f"- Memory: {memory_content}\n"
-        else:
-            memory = ""
-
+        memory = ""
+        if self.memory:
+            memory_content = self.memory.load_memory(load_type='string', user_id=user_id)
+            if memory_content:
+                memory = f"- Memory: {memory_content}\n"
+            
         prompt = (
             "You are given a task, a list of available tools, and the memory about user to have precise information.\n"
             f"- Task: {query}\n"

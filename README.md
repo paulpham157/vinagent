@@ -55,7 +55,7 @@ agent = Agent(
     tools = ['vinagent.tools.websearch_tools',
              'vinagent.tools.yfinance_tools'],
     tools_path = 'templates/tools.json', # Place to save tools. Default is 'templates/tools.json'
-    is_reset_tools = True # If True, will reset tools every time. Default is False
+    is_reset_tools = True # If True, it will reset tools every time reinitializing an agent. Default is False
 )
 
 # Step 2: invoke the agent
@@ -681,8 +681,7 @@ agent = Agent(
         "Summarize the main information\n"],
     tools = ['vinagent.tools.websearch_tools'],
     tools_path = 'templates/tools.json',
-    memory_path ='templates/memory.json',
-    is_reset_tools = True # If True, will reset tools every time. Default is False
+    memory_path = 'templates/memory.json'
 )
 
 result = agent.invoke(query="What is the weather today in Ha Noi?")

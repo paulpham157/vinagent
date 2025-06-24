@@ -73,24 +73,24 @@ def _patched_agent_invoke(original, self, *args, **kwargs):
         # Set agent-specific attributes
         _set_span_attributes(span, self)
 
-        # try:
-        # Call the original invoke method
-        result = original(self, *args, **kwargs)
+        try:
+            # Call the original invoke method
+            result = original(self, *args, **kwargs)
 
-        # Handle outputs
-        outputs = _process_outputs(result)
-        span.set_outputs(outputs)
+            # Handle outputs
+            outputs = _process_outputs(result)
+            span.set_outputs(outputs)
 
-        # If the result is from an LLM call, set chat attributes
-        if inputs.get("query") and hasattr(result, "content"):
-            _set_chat_attributes(span, inputs.get("query"), result.content)
+            # If the result is from an LLM call, set chat attributes
+            if inputs.get("query") and hasattr(result, "content"):
+                _set_chat_attributes(span, inputs.get("query"), result.content)
 
-        return result
-
-        # except Exception as e:
-        #     _logger.error(f"Error during Agent.invoke tracing: {e}")
-        #     span.set_status("ERROR", str(e))
-        #     raise
+            return result
+        
+        except Exception as e:
+            _logger.error(f"Error during Agent.invoke tracing: {e}")
+            span.set_status("ERROR", str(e))
+            raise
 
 def _construct_full_inputs(func, self, *args, **kwargs):
     """
