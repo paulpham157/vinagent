@@ -1,3 +1,8 @@
+
+![PyPI](https://img.shields.io/pypi/v/vinagent)
+![Downloads](https://img.shields.io/pypi/dm/vinagent)
+![License](https://img.shields.io/github/license/datascienceworld-kan/vinagent)
+
 # 1. Introduction
 
 `vinagent` is a lightweight and flexible library designed for building smart agent assistants across various industries. Whether you're creating an AI-powered customer service bot, a data analysis assistant, or a domain-specific automation agent, vinagent provides a simple yet powerful foundation.
