@@ -1,0 +1,147 @@
+site_name: Vinagent
+site_url: https://datascienceworld-kan.github.io/vinagent-docs
+repo_url: https://github.com/datascienceworld-kan/vinagent
+edit_uri: edit/main/docs/docs/
+theme:
+  name: material
+  palette:
+      primary: indigo
+  features:
+    - content.code.copy
+    - announce.dismiss
+    - content.code.annotate
+    - content.code.select
+    - content.tabs.link
+    - content.action.edit
+    - content.tooltips
+    - toc.follow
+    - navigation.indexes
+    - navigation.expand
+    - navigation.sections
+    - navigation.tabs
+    - navigation.top
+    - navigation.footer
+    - navigation.path
+    - navigation.prune
+    - navigation.tracking
+    - search.highlight
+    - search.share
+    - search.suggest
+
+nav:
+  - Get started: 
+    - index.md
+    - Quick Start:
+      - Start with basic Agent: get_started/basic_agent.md
+      - Build a custom: 
+        - 1. Add tools: get_started/add_tool.md
+        - 2. Add memory: get_started/add_memory.md
+        - 3. Async Invoking: get_started/async_invoke.md
+        - 4. Streaming: get_started/streaming.md
+        - 5. Observability: get_started/observability.md
+      - Run local ReactJS App: get_started/local_run.md
+    - Agent Development:
+      - Workflow & Agent: get_started/workflow_and_agent.md
+  - Reference: 
+    - Agent: reference/agent.md
+    - Memory: reference/memory.md
+  - Contributing:
+    - Contributing: contributing/contributing.md
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          rendering:
+            signature_formatter: black
+          import:
+            - https://docs.python.org/3/objects.inv
+          options:
+            preload_modules:
+              - vinagent
+              - langchain_core
+            enable_inventory: true
+            members_order: source
+            allow_inspection: true
+            heading_level: 2
+            show_bases: true
+            show_source: false 
+            summary: true
+            inherited_members: true
+            selection:
+              docstring_style: google
+            docstring_section_style: table
+            show_root_toc_entry: false
+            show_signature: true
+            show_signature_annotations: true
+            separate_signature: true
+            line_length: 60
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            signature_crossrefs: true
+            options:
+              filters:
+                - "!^_"
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - abbr
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true
+      title: "Table of Content"
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      use_pygments: true
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink:
+      normalize_issue_symbols: true
+      repo_url_shorthand: true
+      user: langchain-ai
+      repo: langgraph
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets:
+      auto_append:
+        - includes/mkdocs.md
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+      combine_header_slug: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+extra_css:
+  - stylesheets/navigation_title_ovverides.css
+  - stylesheets/version_admonitions.css
+  - stylesheets/sticky_navigation.css
+
+copyright: >
+  Copyright &copy; 2025 DataScienceWorld.Kan, Inc | <a href="#__consent">Consent Preferences</a>
