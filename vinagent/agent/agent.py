@@ -68,7 +68,7 @@ if is_jupyter_notebook():
     nest_asyncio.apply()
 
 class Agent(AgentMeta):
-    """Concrete implementation of an AI agent with tool-calling capabilities"""
+    """The Agent class is a concrete implementation of an AI agent with tool-calling capabilities, inheriting from AgentMeta. It integrates a language model, tools, memory, and flow management to process queries, execute tools, and maintain conversational context."""
     def __init__(
         self,
         llm: Union[ChatTogether, BaseLanguageModel, BaseChatOpenAI],
@@ -255,11 +255,13 @@ class Agent(AgentMeta):
         return prompt
     
     def prompt_tool(self, query: str, tool_call: str, tool_message: ToolMessage, *args, **kwargs) -> str:
-        tool_template=("You are a professional reporter. Your task is to deliver a clear and factual report that directly addresses the given question. Use the tool's name and result only to support your explanation. Do not fabricate any information or over-interpret the result.\n"
+        tool_template=("You are a an AI assistant. You get an result from a Tool.\n"
+            "- If the question and tool's result is easy. You can provide a simple answer.\n"
+            "- If the question and tool's result is complex. Your task is to deliver a clear and factual report that directly addresses the given question. Use the tool's name and result only to support your explanation. Do not fabricate any information or over-interpret the result.\n"
             f"- Question: {query}\n"
             f"- Tool Used: {tool_call}\n"
-            f"- Result: {tool_message.artifact}\n"
-            "Let's report:"
+            f"- Tool's Result: {tool_message.artifact}\n"
+            "Let's answer:"
         )
         return tool_template
 
@@ -434,13 +436,15 @@ class Agent(AgentMeta):
                     return response
                 
                 tool_call = json.loads(tool_data)
-                tool_message = await self.tools_manager._execute_tool(
-                    tool_name=tool_call["tool_name"],
-                    tool_type=tool_call["tool_type"], 
-                    arguments=tool_call["arguments"],
-                    module_path=tool_call["module_path"],
-                    mcp_client=self.mcp_client,
-                    mcp_server_name=self.mcp_server_name
+                tool_message = await asyncio.gather(
+                    self.tools_manager._execute_tool(
+                        tool_name=tool_call["tool_name"],
+                        tool_type=tool_call["tool_type"], 
+                        arguments=tool_call["arguments"],
+                        module_path=tool_call["module_path"],
+                        mcp_client=self.mcp_client,
+                        mcp_server_name=self.mcp_server_name
+                    )
                 )
                 if self.memory and is_save_memory:
                     self.save_memory(message=tool_message, user_id=self._user_id)

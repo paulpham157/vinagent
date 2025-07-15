@@ -9,6 +9,7 @@ from typing import Dict, Any, Optional, Callable, Union, Literal
 import ast
 import uuid
 from pathlib import Path
+import shutil
 from .initialize import llm
 from vinagent.mcp import load_mcp_tools
 from vinagent.mcp.client import DistributedMCPClient
@@ -21,8 +22,23 @@ logger = logging.getLogger(__name__)
 
 
 class ToolManager:
-    """Centralized tool management class"""
+    """
+    Centralized tool management class for registering, loading, saving, and executing tools.
+    Tools are stored in a JSON file and can be of type 'function', 'mcp', or 'module'.
+    """
     def __init__(self, tools_path: Path = Path("templates/tools.json"), is_reset_tools: bool=False):
+        """
+        Initialize the ToolManager with a path to the tools JSON file.
+
+        Args:
+            tools_path (Path, optional): Path to the JSON file for storing tools. Defaults to Path("templates/tools.json").
+            is_reset_tools (bool, optional): If True, resets the tools file to an empty JSON object. Defaults to False.
+
+        Behavior:
+            - Converts tools_path to a Path object if provided as a string.
+            - Creates the tools file if it does not exist.
+            - Resets the tools file if is_reset_tools is True.
+        """
         self.tools_path = tools_path
         self.is_reset_tools = is_reset_tools
         self.tools_path = Path(tools_path) if isinstance(tools_path, str) else tools_path
@@ -35,7 +51,12 @@ class ToolManager:
         self._registered_functions: Dict[str, Callable] = {}
         
     def load_tools(self) -> Dict[str, Any]:
-        """Load existing tools from JSON"""
+        """
+        Load existing tools from the JSON file.
+
+        Returns:
+            Dict[str, Any]: A dictionary of tool metadata, where keys are tool names.
+        """
         if self.tools_path:
             with open(self.tools_path, "r", encoding="utf-8") as f:
                 return json.load(f)
@@ -43,17 +64,36 @@ class ToolManager:
             return {}
 
     def save_tools(self, tools: Dict[str, Any]) -> None:
-        """Save tools to JSON"""
+        """
+        Save tools metadata to the JSON file.
+
+        Args:
+            tools (Dict[str, Any]): Dictionary of tool metadata to save.
+        """
         with open(self.tools_path, "w", encoding="utf-8") as f:
             json.dump(tools, f, indent=4, ensure_ascii=False)
 
     def register_function_tool(self, func):
-        """Decorator to register a function as a tool
-        # Example usage:
-        @function_tool
-        def sample_function(x: int, y: str) -> str:
-            '''Sample function for testing'''
-            return f"{y}: {x}"
+        """
+        Decorator to register a function as a tool.
+
+        Args:
+            func: The function to register as a tool.
+
+        Returns:
+            Callable: A wrapped function that retains original behavior.
+
+        Example:
+            @tool_manager.register_function_tool
+            def sample_function(x: int, y: str) -> str:
+                '''Sample function for testing'''
+                return f"{y}: {x}"
+
+        Behavior:
+            - Extracts function metadata (name, arguments, return type, docstring).
+            - Assigns a unique tool_call_id.
+            - Stores metadata in the tools JSON file.
+            - Registers the function in _registered_functions for execution.
         """
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -101,7 +141,22 @@ class ToolManager:
         return wrapper
 
     async def register_mcp_tool(self, client: DistributedMCPClient, server_name: str = None) -> list[Dict[str, Any]]:
-        # Load all tools
+        """
+        Register tools from an MCP (Memory Compute Platform) server.
+
+        Args:
+            client (DistributedMCPClient): Client for interacting with the MCP server.
+            server_name (str, optional): Name of the MCP server. Defaults to None.
+
+        Returns:
+            list[Dict[str, Any]]: List of registered MCP tool metadata.
+
+        Behavior:
+            - Fetches tools from the MCP server using the client.
+            - Converts MCP tools to the internal tool format.
+            - Assigns unique tool_call_id for each tool.
+            - Saves tools to the JSON file.
+        """
         logger.info(f"Registering MCP tools")
         all_tools = []
         if server_name:
@@ -143,8 +198,33 @@ class ToolManager:
         return new_tools
 
     def register_module_tool(self, module_path: str) -> None:
-        """Register tools from a module"""
+        """
+        Register tools from a Python module.
+
+        Args:
+            module_path (str): Path to the module or import path in module import format.
+
+        Raises:
+            ValueError: If the module cannot be loaded or tool format is invalid.
+
+        Behavior:
+            - Copies the module file to the tools directory if a file path is provided.
+            - Imports the module and extracts tool metadata using the language model.
+            - Assigns a unique tool_call_id for each tool.
+            - Saves tools to the JSON file.
+        """
         try:
+            if os.path.isfile(module_path):
+                # This is a path of module import format
+                module_path = Path(module_path)
+                absolute_lib_path = Path(os.path.dirname(os.path.abspath(__file__)))
+                destination_path = Path(
+                    os.path.join(absolute_lib_path.parent, "tools", module_path.name)
+                )
+                shutil.copy2(module_path, destination_path)
+                module_path = (
+                    f"vinagent.tools.{destination_path.name.split('.')[0]}"
+                )
             module = importlib.import_module(module_path, package=__package__)
             module_source = inspect.getsource(module)
         except (ImportError, ValueError) as e:
@@ -184,7 +264,15 @@ class ToolManager:
         logger.info(f"Completed registration for module {module_path}")
 
     def extract_tool(self, text: str) -> Optional[str]:
-        """Extract first valid JSON object from text"""
+        """
+        Extract the first valid JSON object from a text string.
+
+        Args:
+            text (str): The text to parse for a JSON object.
+
+        Returns:
+            Optional[str]: The extracted JSON string, or None if no valid JSON is found.
+        """
         stack = []
         start = text.find("{")
         if start == -1:
@@ -208,7 +296,20 @@ class ToolManager:
                             module_path: str,
                             tool_type: str = Literal['function', 'mcp', 'module']
                             ) -> Any:
-        """Execute the specified tool with given arguments"""
+        """
+        Execute the specified tool with the given arguments.
+
+        Args:
+            tool_name (str): Name of the tool to execute.
+            arguments (dict): Dictionary of arguments to pass to the tool.
+            mcp_client (DistributedMCPClient): Client for MCP tool execution.
+            mcp_server_name (str): Name of the MCP server.
+            module_path (str): Path to the module for module-type tools.
+            tool_type (str): Type of tool ('function', 'mcp', or 'module').
+
+        Returns:
+            Any: The result of the tool execution, typically a ToolMessage.
+        """
         if tool_type == 'function':
             message = await FunctionTool.execute(self, tool_name, arguments)
         elif tool_type == 'mcp':
@@ -219,7 +320,15 @@ class ToolManager:
             
     @staticmethod
     def _extract_json(text: str) -> Optional[str]:
-        """Extract first valid JSON object from text using stack-based parsing"""
+        """
+        Extract the first valid JSON object from text using stack-based parsing.
+
+        Args:
+            text (str): The text to parse for a JSON object.
+
+        Returns:
+            Optional[str]: The extracted JSON string, or None if no valid JSON is found.
+        """
         start = text.find("{")
         if start == -1:
             return None
@@ -236,12 +345,29 @@ class ToolManager:
 
 
 class FunctionTool:
+    """
+    Utility class for executing function-type tools.
+    """
     @classmethod
     async def execute(cls,
             tool_manager: ToolManager,
             tool_name: str,
             arguments: Dict[str, Any]
             ):
+        """
+        Execute a registered function tool.
+
+        Args:
+            tool_manager (ToolManager): The ToolManager instance containing registered tools.
+            tool_name (str): Name of the function tool to execute.
+            arguments (Dict[str, Any]): Arguments to pass to the function.
+
+        Returns:
+            ToolMessage: A message containing the execution result or error details.
+
+        Raises:
+            Exception: If the function execution fails, logs the error and returns a message.
+        """
         registered_functions = tool_manager.load_tools()
 
         if tool_name in tool_manager._registered_functions:
@@ -264,6 +390,9 @@ class FunctionTool:
 
 
 class MCPTool:
+    """
+    Utility class for executing MCP-type tools.
+    """
     @classmethod
     async def execute(cls,
             tool_manager: ToolManager,
@@ -271,7 +400,22 @@ class MCPTool:
             arguments: Dict[str, Any], 
             mcp_client: DistributedMCPClient,
             mcp_server_name: str):
-        
+        """
+        Execute an MCP tool using the provided client and server.
+
+        Args:
+            tool_manager (ToolManager): The ToolManager instance containing registered tools.
+            tool_name (str): Name of the MCP tool to execute.
+            arguments (Dict[str, Any]): Arguments to pass to the tool.
+            mcp_client (DistributedMCPClient): Client for interacting with the MCP server.
+            mcp_server_name (str): Name of the MCP server.
+
+        Returns:
+            ToolMessage: A message containing the execution result or error details.
+
+        Raises:
+            Exception: If the tool execution fails, logs the error and returns a message.
+        """
         registered_functions = tool_manager.load_tools()
         """Call the MCP tool natively using the client session."""
         async with mcp_client.session(mcp_server_name) as session:
@@ -299,13 +443,30 @@ class MCPTool:
 
 
 class ModuleTool:
+    """
+    Utility class for executing module-type tools.
+    """
     @classmethod
     async def execute(cls, 
             tool_manager: ToolManager,
             tool_name: str, 
             arguments: Dict[str, Any], 
             module_path: Union[str, Path], *arg, **kwargs):
-        
+        """
+        Execute a module-based tool by importing and calling the specified function.
+
+        Args:
+            tool_manager (ToolManager): The ToolManager instance containing registered tools.
+            tool_name (str): Name of the module tool to execute.
+            arguments (Dict[str, Any]): Arguments to pass to the tool.
+            module_path (Union[str, Path]): Path to the module containing the tool.
+
+        Returns:
+            ToolMessage: A message containing the execution result or error details.
+
+        Raises:
+            ImportError, AttributeError: If the module or function cannot be loaded, logs the error and returns a message.
+        """
         registered_functions = tool_manager.load_tools()
         try:
             if tool_name in globals():

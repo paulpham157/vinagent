@@ -4,33 +4,100 @@ from typing import Optional, Literal, Union
 import json
 import logging
 from aucodb.graph import LLMGraphTransformer
+from langchain_together import ChatTogether
+from langchain_core.language_models.base import BaseLanguageModel
+from langchain_openai.chat_models.base import BaseChatOpenAI
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 class MemoryMeta(ABC):
+    """
+    Abstract base class defining the interface for memory operations in an AI agent.
+    """
     @abstractmethod
-    def update_memory(self, graph: list):
-        pass
-    
-    @abstractmethod
-    def save_short_term_memory(self, llm, message):
+    def update_memory(self, graph: list, user_id: str = "unknown_user"):
+        """
+        Update the memory with a new graph for a specific user.
+
+        Args:
+            graph (list): List of graph entries to update the memory.
+            user_id (str, optional): The user identifier. Defaults to "unknown_user".
+        """
         pass
 
     @abstractmethod
-    def save_memory(self, message: str, *args, **kwargs):
+    def save_short_term_memory(
+        self,
+        llm: Union[ChatTogether, BaseLanguageModel, BaseChatOpenAI],
+        message: str,
+        user_id: str = "unknown_user",
+        *args,
+        **kwargs,
+    ):
+        """
+        Convert a message to a graph and save it to memory.
+
+        Args:
+            llm (Union[ChatTogether, BaseLanguageModel, BaseChatOpenAI]): Language model for graph generation.
+            message (str): The message to convert and store.
+            user_id (str, optional): The user identifier. Defaults to "unknown_user".
+            *args, **kwargs: Additional arguments for flexibility.
+        """
         pass
+
+    @abstractmethod
+    def save_memory(
+        self,
+        obj: list,
+        memory_path: Path,
+        user_id: str = "unknown_user",
+        *args,
+        **kwargs,
+    ):
+        """
+        Save a list of memory entries to the memory file for a specific user.
+
+        Args:
+            obj (list): List of memory entries to save.
+            memory_path (Path): Path to the memory file.
+            user_id (str, optional): The user identifier. Defaults to "unknown_user".
+            *args, **kwargs: Additional arguments for flexibility.
+        """
+        pass
+
 
 class Memory(MemoryMeta):
-    '''This stores the memory of the conversation.
-    '''
-    def __init__(self, 
-            memory_path: Optional[Union[Path, str]] = Path('templates/memory.jsonl'), 
-            is_reset_memory: bool=False,
-            is_logging: bool=False,
-        *args, **kwargs):
+    """
+    Concrete implementation of MemoryMeta for storing and managing conversational memory.
+    Memory is persisted in a JSON Lines file, with support for user-specific data and graph-based representations.
+    """
+
+    def __init__(
+        self,
+        memory_path: Optional[Union[Path, str]] = Path("templates/memory.jsonl"),
+        is_reset_memory: bool = False,
+        is_logging: bool = False,
+        *args,
+        **kwargs,
+    ):
+        """
+        Initialize the Memory instance.
+
+        Args:
+            memory_path (Optional[Union[Path, str]], optional): Path to the JSON Lines file for memory storage.
+                Defaults to Path("templates/memory.jsonl").
+            is_reset_memory (bool, optional): If True, resets the memory file to an empty JSON object. Defaults to False.
+            is_logging (bool, optional): If True, enables logging of memory operations. Defaults to False.
+            *args, **kwargs: Additional arguments for future extensions.
+
+        Behavior:
+            - Converts memory_path to a Path object if provided as a string.
+            - Creates the parent directory for memory_path if it does not exist.
+            - Initializes an empty JSON file if it does not exist.
+            - Resets the memory file if is_reset_memory is True.
+        """
         if isinstance(memory_path, str) and memory_path:
             self.memory_path = Path(memory_path)
         else:
@@ -43,78 +110,134 @@ class Memory(MemoryMeta):
         if self.is_reset_memory:
             self.memory_path.write_text(json.dumps({}, indent=4), encoding="utf-8")
 
-    def load_memory(self, load_type: Literal['list', 'string'] = 'list', user_id: str = None):
-        data = []
-        with open(self.memory_path, "r", encoding="utf-8") as f:
-                # for line in f:
-                #     try:
-                #         route = json.loads(line)
-                #         if route:
-                #             if user_id:
-                #                 if route['user_id'] == user_id:
-                #                     data.append(route)
-                #             else:
-                #                 data.append(route)
-                #     except json.JSONDecodeError as e:
-                #         logger.warning(
-                #             f"Skipping invalid JSON line: {line.strip()} - Error: {e}"
-                #         )
+    def load_memory_by_user(
+        self, load_type: Literal["list", "string"] = "list", user_id: str = "unknown_user"
+    ):
+        """
+        Load memory data for a specific user from the memory file.
 
-                data = json.load(f)
-                if not user_id: # Load all memory
-                    data_user = data
-                else: 
-                    if user_id in data: # Load memory by user_id
-                        data_user = data[user_id]
-                    else:
-                        data_user = []
+        Args:
+            load_type (Literal["list", "string"], optional): Format of the returned data ("list" or "string").
+                Defaults to "list".
+            user_id (str, optional): The user identifier. Defaults to "unknown_user".
 
-        if load_type == 'list':
+        Returns:
+            Union[List[dict], str]: List of memory entries if load_type is "list", or a string representation if "string".
+        """
+        data = self.load_all_memory()
+        data_user = []
+        if user_id in data:
+            data_user = data[user_id]
+
+        if load_type == "list":
             return data_user
-        elif load_type == 'string':
+        elif load_type == "string":
             message = self.revert_object_mess(data_user)
             return message
 
-    def save_memory(self, obj: list, memory_path: Path, user_id: str):
-        memory = self.load_memory(load_type='list')
+    def load_all_memory(self):
+        """
+        Load all memory data from the memory file.
+
+        Returns:
+            dict: The entire memory data as a dictionary, with user IDs as keys and lists of memory entries as values.
+        """
+        with open(self.memory_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data
+
+    def save_memory(self, obj: list, memory_path: Path, user_id: str = "unknown_user"):
+        """
+        Save a list of memory entries for a specific user to the memory file.
+
+        Args:
+            obj (list): List of memory entries to save.
+            memory_path (Path): Path to the memory file.
+            user_id (str, optional): The user identifier. Defaults to "unknown_user".
+        """
+        memory = self.load_all_memory()
         memory[user_id] = obj
         with open(memory_path, "w", encoding="utf-8") as f:
-            # for item in obj:
-            #     f.write(json.dumps(item) + '\n')
             json.dump(memory, f, indent=4, ensure_ascii=False)
 
         if self.is_logging:
             logger.info(f"Saved memory!")
 
-    def save_short_term_memory(self, llm, message, user_id):
-        graph_transformer = LLMGraphTransformer(
-            llm = llm
-        )
-        graph = graph_transformer.generate_graph(message)        
-        self.update_memory(graph, user_id)
+    def save_short_term_memory(
+        self,
+        llm: Union[ChatTogether, BaseLanguageModel, BaseChatOpenAI],
+        message: str,
+        user_id: str = "unknown_user",
+        *args,
+        **kwargs,
+    ):
+        """
+        Convert a message to a graph using a language model and update the user's memory.
+
+        Args:
+            llm (Union[ChatTogether, BaseLanguageModel, BaseChatOpenAI]): Language model for graph generation.
+            message (str): The message to convert and store.
+            user_id (str, optional): The user identifier. Defaults to "unknown_user".
+            *args, **kwargs: Additional arguments for flexibility.
+
+        Returns:
+            list: The generated graph representation of the message.
+        """
+        graph_transformer = LLMGraphTransformer(llm=llm)
+        graph = graph_transformer.generate_graph(message)
+        self.update_memory(user_id=user_id, graph=graph)
         return graph
 
     def revert_object_mess(self, object: list[dict]):
+        """
+        Convert a list of memory entries into a human-readable string format.
+
+        Args:
+            object (list[dict]): List of memory entries, each containing head, relation, relation_properties, and tail.
+
+        Returns:
+            str: String representation of memory entries in the format "head -> relation[relation_properties] -> tail".
+        """
         mess = []
         for line in object:
             head, _, relation, relation_properties, tail, _ = list(line.values())
-            relation_additional= f"[{relation_properties}]" if relation_properties else ""
+            relation_additional = (
+                f"[{relation_properties}]" if relation_properties else ""
+            )
             mess.append(f"{head} -> {relation}{relation_additional} -> {tail}")
         mess = "\n".join(mess)
         return mess
 
-    def update_memory(self, graph: list, user_id: str):
-        memory_about_user = self.load_memory(load_type='list', user_id=user_id)
+    def update_memory(self, graph: list, user_id: str = "unknown_user"):
+        """
+        Update the user's memory by adding or updating graph entries, avoiding duplicates.
+
+        Args:
+            graph (list): List of graph entries, each with head, head_type, relation, relation_properties, tail, and tail_type.
+            user_id (str, optional): The user identifier. Defaults to "unknown_user".
+
+        Returns:
+            list: The updated list of memory entries for the user.
+        """
+        memory_about_user = self.load_memory_by_user(load_type="list", user_id=user_id)
         if memory_about_user:
-            index_memory = [(item['head'], item['relation'], item['tail']) for item in memory_about_user]
-            index_memory_head_relation_tail_type = [(item['head'], item['relation'],  item['tail_type']) for item in memory_about_user]
+            index_memory = [
+                (item["head"], item["relation"], item["tail"])
+                for item in memory_about_user
+            ]
+            index_memory_head_relation_tail_type = [
+                (item["head"], item["relation"], item["tail_type"])
+                for item in memory_about_user
+            ]
         else:
             index_memory = []
             index_memory_head_relation_tail_type = []
-            
+
         if graph:
             for line in graph:
-                head, head_type, relation, relation_properties, tail, tail_type= list(line.values())
+                head, head_type, relation, relation_properties, tail, tail_type = list(
+                    line.values()
+                )
                 lookup_hrt = (head, relation, tail)
                 lookup_hrttp = (head, relation, tail_type)
                 if lookup_hrt in index_memory:
@@ -122,9 +245,13 @@ class Memory(MemoryMeta):
                         logger.info(f"Bypass {line}")
                     pass
                 elif lookup_hrttp in index_memory_head_relation_tail_type:
-                    index_match = index_memory_head_relation_tail_type.index(lookup_hrttp)
+                    index_match = index_memory_head_relation_tail_type.index(
+                        lookup_hrttp
+                    )
                     if self.is_logging:
-                        logger.info(f"Update new line: {line}\nfrom old line {memory_about_user[index_match]}")
+                        logger.info(
+                            f"Update new line: {line}\nfrom old line {memory_about_user[index_match]}"
+                        )
                     memory_about_user[index_match] = line
                 else:
                     if self.is_logging:
@@ -133,6 +260,8 @@ class Memory(MemoryMeta):
         else:
             if self.is_logging:
                 logger.info(f"No thing updated")
-        
-        self.save_memory(obj=memory_about_user, memory_path=self.memory_path, user_id=user_id)
+
+        self.save_memory(
+            obj=memory_about_user, memory_path=self.memory_path, user_id=user_id
+        )
         return memory_about_user
