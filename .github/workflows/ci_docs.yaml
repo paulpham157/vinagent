@@ -24,7 +24,7 @@ jobs:
           pip install mkdocs mkdocs-material mkdocstrings[python]
 
       - name: Build MkDocs site
-        working-directory: vinagent/docs
+        working-directory: ./vinagent/docs
         run: mkdocs build
 
       - name: Deploy to GitHub Pages
