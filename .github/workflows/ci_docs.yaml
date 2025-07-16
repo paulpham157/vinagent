@@ -24,10 +24,11 @@ jobs:
           pip install mkdocs mkdocs-material mkdocstrings[python]
 
       - name: Build MkDocs site
+        working-directory: vinagent/docs
         run: mkdocs build
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./site
+          publish_dir: ./vinagent/docs/site
