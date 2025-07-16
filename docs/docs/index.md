@@ -3,9 +3,8 @@ hide_comments: true
 title: Vinagent
 ---
 
-
-![PyPI](https://img.shields.io/pypi/v/vinagent)
-![Downloads](https://img.shields.io/pypi/dm/vinagent)
+[![Version](https://img.shields.io/pypi/v/vinagent.svg)](https://pypi.org/project/vinagent/)
+[![Downloads](https://static.pepy.tech/badge/vinagent/month)](https://pepy.tech/project/vinagent)
 ![License](https://img.shields.io/github/license/datascienceworld-kan/vinagent)
 
 `Vinagent` is a simple and flexible library designed for building smart agent assistants across various industries. Vinagent towards the AI in multiple-industries, distinguishing with other agent library by its simplicity, integrability, observability, and optimizablity.
