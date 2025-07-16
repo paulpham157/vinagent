@@ -60,13 +60,12 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
-          paths: [".."]
+          paths: ["../.."]
           import:
             - https://docs.python.org/3/objects.inv
           options:
             preload_modules:
               - vinagent
-              - langchain_core
             enable_inventory: true
             members_order: source
             allow_inspection: true
