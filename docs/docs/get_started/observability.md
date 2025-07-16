@@ -87,6 +87,7 @@ result = agent.invoke(query="What is the weather today in Ha Noi?")
 !!! note
     You are able to access the dashboard at http://localhost:5000/ and view logs of aformentioned query by accessing to `agent-dev` and click to `Traces` tab on the last of header navigation bar of `agent-dev` experiment.
 
+
 <div>
   <style scoped>
   button {
@@ -118,6 +119,6 @@ result = agent.invoke(query="What is the weather today in Ha Noi?")
   <iframe
     id="trace-renderer"
     style="width: 100%; height: 500px; border: none; resize: vertical;"
-    src="http://localhost:5000/static-files/lib/notebook-trace-renderer/index.html?trace_id=2db33eeb13474791942d086d114e9c5b&amp;experiment_id=451007843634367037&amp;trace_id=63934550d0004210af0bb407c53d918e&amp;experiment_id=451007843634367037&amp;version=3.1.0"
+    src="http://localhost:5000/static-files/lib/notebook-trace-renderer/index.html?trace_id=74105e3849a041e09eb828d73dfbf515&amp;experiment_id=900548938729976750&amp;trace_id=6ec5f26c820340ad9a2b5d3091771eb6&amp;experiment_id=900548938729976750&amp;version=3.1.0"
   />
 </div>

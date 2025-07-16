@@ -98,9 +98,9 @@ markdown_extensions:
   - admonition
   - pymdownx.details
   - attr_list
+  - md_in_html
   - def_list
   - footnotes
-  - md_in_html
   - pymdownx.tabbed:
       alternate_style: true
   - toc:
