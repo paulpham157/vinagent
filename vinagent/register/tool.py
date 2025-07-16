@@ -26,7 +26,12 @@ class ToolManager:
     Centralized tool management class for registering, loading, saving, and executing tools.
     Tools are stored in a JSON file and can be of type 'function', 'mcp', or 'module'.
     """
-    def __init__(self, tools_path: Path = Path("templates/tools.json"), is_reset_tools: bool=False):
+
+    def __init__(
+        self,
+        tools_path: Path = Path("templates/tools.json"),
+        is_reset_tools: bool = False,
+    ):
         """
         Initialize the ToolManager with a path to the tools JSON file.
 
@@ -41,7 +46,9 @@ class ToolManager:
         """
         self.tools_path = tools_path
         self.is_reset_tools = is_reset_tools
-        self.tools_path = Path(tools_path) if isinstance(tools_path, str) else tools_path
+        self.tools_path = (
+            Path(tools_path) if isinstance(tools_path, str) else tools_path
+        )
         if not self.tools_path.exists():
             self.tools_path.write_text(json.dumps({}, indent=4), encoding="utf-8")
 
@@ -49,7 +56,7 @@ class ToolManager:
             self.tools_path.write_text(json.dumps({}, indent=4), encoding="utf-8")
 
         self._registered_functions: Dict[str, Callable] = {}
-        
+
     def load_tools(self) -> Dict[str, Any]:
         """
         Load existing tools from the JSON file.
@@ -95,6 +102,7 @@ class ToolManager:
             - Stores metadata in the tools JSON file.
             - Registers the function in _registered_functions for execution.
         """
+
         @wraps(func)
         def wrapper(*args, **kwargs):
             return func(*args, **kwargs)
@@ -140,7 +148,9 @@ class ToolManager:
             )
         return wrapper
 
-    async def register_mcp_tool(self, client: DistributedMCPClient, server_name: str = None) -> list[Dict[str, Any]]:
+    async def register_mcp_tool(
+        self, client: DistributedMCPClient, server_name: str = None
+    ) -> list[Dict[str, Any]]:
         """
         Register tools from an MCP (Memory Compute Platform) server.
 
@@ -169,24 +179,30 @@ class ToolManager:
             except Exception as e:
                 logger.error(f"Error loading MCP tools: {e}")
                 return []
+
         # Convert MCP tools to our format
         def convert_mcp_tool(mcp_tool: Dict[str, Any]):
-            tool_name = mcp_tool['name']
-            arguments = dict([(k, v['type']) for (k,v) in mcp_tool['args_schema']['properties'].items()])
-            docstring = mcp_tool['description']
-            return_value = mcp_tool['response_format']
+            tool_name = mcp_tool["name"]
+            arguments = dict(
+                [
+                    (k, v["type"])
+                    for (k, v) in mcp_tool["args_schema"]["properties"].items()
+                ]
+            )
+            docstring = mcp_tool["description"]
+            return_value = mcp_tool["response_format"]
             tool = {}
-            tool['tool_name'] = tool_name
-            tool['arguments'] = arguments
-            tool['return'] = return_value
-            tool['docstring'] = docstring
-            tool['module_path'] = '__mcp__'
-            tool['tool_type'] = 'mcp'
+            tool["tool_name"] = tool_name
+            tool["arguments"] = arguments
+            tool["return"] = return_value
+            tool["docstring"] = docstring
+            tool["module_path"] = "__mcp__"
+            tool["tool_type"] = "mcp"
             # tool['mcp_client_connections'] = client.connections
             # tool['mcp_server_name'] = server_name
-            tool['tool_call_id'] = "tool_" + str(uuid.uuid4())
+            tool["tool_call_id"] = "tool_" + str(uuid.uuid4())
             return tool
-        
+
         new_tools = [convert_mcp_tool(mcp_tool.__dict__) for mcp_tool in all_tools]
         tools = self.load_tools()
         for tool in new_tools:
@@ -222,9 +238,7 @@ class ToolManager:
                     os.path.join(absolute_lib_path.parent, "tools", module_path.name)
                 )
                 shutil.copy2(module_path, destination_path)
-                module_path = (
-                    f"vinagent.tools.{destination_path.name.split('.')[0]}"
-                )
+                module_path = f"vinagent.tools.{destination_path.name.split('.')[0]}"
             module = importlib.import_module(module_path, package=__package__)
             module_source = inspect.getsource(module)
         except (ImportError, ValueError) as e:
@@ -255,7 +269,7 @@ class ToolManager:
         tools = self.load_tools()
         for tool in new_tools:
             tool["module_path"] = module_path
-            tool["tool_type"] = 'module'
+            tool["tool_type"] = "module"
             tools[tool["tool_name"]] = tool
             tools[tool["tool_name"]]["tool_call_id"] = "tool_" + str(uuid.uuid4())
             logger.info(f"Registered {tool['tool_name']}:\n{tool}")
@@ -287,15 +301,15 @@ class ToolManager:
                     return text[start : i + 1]
         return None
 
-
-    async def _execute_tool(self, 
-                            tool_name: str, 
-                            arguments: dict,
-                            mcp_client: DistributedMCPClient,
-                            mcp_server_name: str,
-                            module_path: str,
-                            tool_type: str = Literal['function', 'mcp', 'module']
-                            ) -> Any:
+    async def _execute_tool(
+        self,
+        tool_name: str,
+        arguments: dict,
+        mcp_client: DistributedMCPClient,
+        mcp_server_name: str,
+        module_path: str,
+        tool_type: str = Literal["function", "mcp", "module"],
+    ) -> Any:
         """
         Execute the specified tool with the given arguments.
 
@@ -310,14 +324,16 @@ class ToolManager:
         Returns:
             Any: The result of the tool execution, typically a ToolMessage.
         """
-        if tool_type == 'function':
+        if tool_type == "function":
             message = await FunctionTool.execute(self, tool_name, arguments)
-        elif tool_type == 'mcp':
-            message = await MCPTool.execute(self, tool_name, arguments, mcp_client, mcp_server_name)
-        elif tool_type == 'module':
+        elif tool_type == "mcp":
+            message = await MCPTool.execute(
+                self, tool_name, arguments, mcp_client, mcp_server_name
+            )
+        elif tool_type == "module":
             message = await ModuleTool.execute(self, tool_name, arguments, module_path)
         return message
-            
+
     @staticmethod
     def _extract_json(text: str) -> Optional[str]:
         """
@@ -348,12 +364,11 @@ class FunctionTool:
     """
     Utility class for executing function-type tools.
     """
+
     @classmethod
-    async def execute(cls,
-            tool_manager: ToolManager,
-            tool_name: str,
-            arguments: Dict[str, Any]
-            ):
+    async def execute(
+        cls, tool_manager: ToolManager, tool_name: str, arguments: Dict[str, Any]
+    ):
         """
         Execute a registered function tool.
 
@@ -393,13 +408,16 @@ class MCPTool:
     """
     Utility class for executing MCP-type tools.
     """
+
     @classmethod
-    async def execute(cls,
-            tool_manager: ToolManager,
-            tool_name: str, 
-            arguments: Dict[str, Any], 
-            mcp_client: DistributedMCPClient,
-            mcp_server_name: str):
+    async def execute(
+        cls,
+        tool_manager: ToolManager,
+        tool_name: str,
+        arguments: Dict[str, Any],
+        mcp_client: DistributedMCPClient,
+        mcp_server_name: str,
+    ):
         """
         Execute an MCP tool using the provided client and server.
 
@@ -419,10 +437,7 @@ class MCPTool:
         registered_functions = tool_manager.load_tools()
         """Call the MCP tool natively using the client session."""
         async with mcp_client.session(mcp_server_name) as session:
-            payload = {
-                "name": tool_name,
-                "arguments": arguments
-            }
+            payload = {"name": tool_name, "arguments": arguments}
             try:
                 # Send the request to the MCP server
                 # response = await session.call_tool(**payload)
@@ -436,7 +451,9 @@ class MCPTool:
                 )
                 return message
             except Exception as e:
-                content = f"Failed to execute mcp tool {tool_name}({arguments}): {str(e)}"
+                content = (
+                    f"Failed to execute mcp tool {tool_name}({arguments}): {str(e)}"
+                )
                 logger.error(content)
                 # raise {"error": content}
                 return content
@@ -446,12 +463,17 @@ class ModuleTool:
     """
     Utility class for executing module-type tools.
     """
+
     @classmethod
-    async def execute(cls, 
-            tool_manager: ToolManager,
-            tool_name: str, 
-            arguments: Dict[str, Any], 
-            module_path: Union[str, Path], *arg, **kwargs):
+    async def execute(
+        cls,
+        tool_manager: ToolManager,
+        tool_name: str,
+        arguments: Dict[str, Any],
+        module_path: Union[str, Path],
+        *arg,
+        **kwargs,
+    ):
         """
         Execute a module-based tool by importing and calling the specified function.
 
@@ -484,7 +506,9 @@ class ModuleTool:
             )
             return message
         except (ImportError, AttributeError) as e:
-            content = f"Failed to execute module tool {tool_name}({arguments}): {str(e)}"
+            content = (
+                f"Failed to execute module tool {tool_name}({arguments}): {str(e)}"
+            )
             logger.error(content)
             # raise {"error": content}
             return content

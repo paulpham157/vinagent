@@ -65,7 +65,7 @@ def convert_mcp_tool_to_langchain_tool(
     if session is None and connection is None:
         raise ValueError("Either a session or a connection config must be provided")
     logger.info(f"mcp original tool: {tool}")
-    
+
     async def call_tool(
         **arguments: dict[str, Any],
     ) -> tuple[str | list[str], list[NonTextContent] | None]:
@@ -118,6 +118,7 @@ async def load_mcp_tools(
         convert_mcp_tool_to_langchain_tool(session, tool, connection=connection)
         for tool in tools.tools
     ]
+
 
 def load_mcp_tools_sync(
     session: ClientSession | None,

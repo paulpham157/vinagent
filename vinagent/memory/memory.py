@@ -12,10 +12,12 @@ from langchain_openai.chat_models.base import BaseChatOpenAI
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class MemoryMeta(ABC):
     """
     Abstract base class defining the interface for memory operations in an AI agent.
     """
+
     @abstractmethod
     def update_memory(self, graph: list, user_id: str = "unknown_user"):
         """
@@ -111,7 +113,9 @@ class Memory(MemoryMeta):
             self.memory_path.write_text(json.dumps({}, indent=4), encoding="utf-8")
 
     def load_memory_by_user(
-        self, load_type: Literal["list", "string"] = "list", user_id: str = "unknown_user"
+        self,
+        load_type: Literal["list", "string"] = "list",
+        user_id: str = "unknown_user",
     ):
         """
         Load memory data for a specific user from the memory file.

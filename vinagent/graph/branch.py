@@ -140,14 +140,16 @@ class Branch(NamedTuple):
                 trace=False,
                 func_accepts_config=True,
             ),
-            list(
-                zip_longest(
-                    writer([e for e in self.ends.values()], True),
-                    [str(la) for la, e in self.ends.items()],
+            (
+                list(
+                    zip_longest(
+                        writer([e for e in self.ends.values()], True),
+                        [str(la) for la, e in self.ends.items()],
+                    )
                 )
-            )
-            if self.ends
-            else None,
+                if self.ends
+                else None
+            ),
         )
 
     def _route(

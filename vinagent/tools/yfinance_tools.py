@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+
 def fetch_stock_data(
     symbol: str,
     start_date: str = "2020-01-01",

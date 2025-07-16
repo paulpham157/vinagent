@@ -57,10 +57,7 @@ from langgraph.errors import (
     create_error_message,
 )
 from langgraph.graph.branch import Branch
-from vinagent.graph.constants import (
-    END,
-    START
-)
+from vinagent.graph.constants import END, START
 from vinagent.graph.graph import (
     CompiledGraph,
     Graph,
@@ -780,9 +777,11 @@ class CompiledStateGraph(CompiledGraph):
             ),
             ChannelWriteTupleEntry(
                 mapper=_control_branch,
-                static=_control_static(node.ends)
-                if node is not None and node.ends is not None
-                else None,
+                static=(
+                    _control_static(node.ends)
+                    if node is not None and node.ends is not None
+                    else None
+                ),
             ),
         )
 
@@ -1077,9 +1076,11 @@ def _control_branch(value: Any) -> Sequence[tuple[str, Any]]:
             rtn.append((CHANNEL_BRANCH_TO.format(command.goto), None))
         else:
             rtn.extend(
-                (TASKS, go)
-                if isinstance(go, Send)
-                else (CHANNEL_BRANCH_TO.format(go), None)
+                (
+                    (TASKS, go)
+                    if isinstance(go, Send)
+                    else (CHANNEL_BRANCH_TO.format(go), None)
+                )
                 for go in command.goto
             )
     return rtn

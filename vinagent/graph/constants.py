@@ -10,21 +10,24 @@ class SpecialNonExecNode(Node):
     def __init__(self, name: Literal["__start__", "__end__"]):
         super().__init__(name=name)  # Match LangGraph's START constant name
 
-    def exec(self, state: Any, config: Optional[RunnableConfig] = None) -> Union[dict, str]:
+    def exec(
+        self, state: Any, config: Optional[RunnableConfig] = None
+    ) -> Union[dict, str]:
         raise RuntimeError("StartNode is a control node and should not be executed")
 
     @property
     def is_branching(self) -> bool:
         return False
-    
+
     def __eq__(self, other):
         if isinstance(other, str):
             return self.name == other
         return super().__eq__(other)
 
+
 # Create a single instance of StartNode to use as the START constant
-START = SpecialNonExecNode(name='__start__')
-END = SpecialNonExecNode(name='__end__')
+START = SpecialNonExecNode(name="__start__")
+END = SpecialNonExecNode(name="__end__")
 
 
 # --- Empty read-only containers ---

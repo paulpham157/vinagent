@@ -77,7 +77,9 @@ class DistributedMCPClient:
             tools = await load_mcp_tools(session)
         ```
         """
-        self.connections: dict[str, Connection] = connections if connections is not None else {}
+        self.connections: dict[str, Connection] = (
+            connections if connections is not None else {}
+        )
 
     @asynccontextmanager
     async def session(
@@ -134,7 +136,11 @@ class DistributedMCPClient:
         return all_tools
 
     async def get_prompt(
-        self, server_name: str, prompt_name: str, *, arguments: dict[str, Any] | None = None
+        self,
+        server_name: str,
+        prompt_name: str,
+        *,
+        arguments: dict[str, Any] | None = None,
     ) -> list[HumanMessage | AIMessage]:
         """Get a prompt from a given MCP server."""
         async with self.session(server_name) as session:

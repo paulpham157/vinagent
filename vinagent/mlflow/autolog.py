@@ -18,6 +18,7 @@ FLAVOR_NAME = "vinagent"
 
 _logger = logging.getLogger(__name__)
 
+
 @experimental(api_or_type="3.1.0")
 @autologging_integration(FLAVOR_NAME)
 def autolog(
@@ -54,6 +55,7 @@ def autolog(
     except Exception as e:
         _logger.warning(f"Failed to enable tracing for Vinagent: {e}")
 
+
 def _patched_agent_invoke(original, self, *args, **kwargs):
     """
     Patches the Agent.invoke method to enable MLflow tracing.
@@ -86,11 +88,12 @@ def _patched_agent_invoke(original, self, *args, **kwargs):
                 _set_chat_attributes(span, inputs.get("query"), result.content)
 
             return result
-        
+
         except Exception as e:
             _logger.error(f"Error during Agent.invoke tracing: {e}")
             span.set_status("ERROR", str(e))
             raise
+
 
 def _construct_full_inputs(func, self, *args, **kwargs):
     """
@@ -102,13 +105,18 @@ def _construct_full_inputs(func, self, *args, **kwargs):
         arguments.pop("self", None)  # Remove 'self'
 
         return {
-            k: v.__dict__ if hasattr(v, "__dict__") and _is_serializable(v.__dict__) else v
+            k: (
+                v.__dict__
+                if hasattr(v, "__dict__") and _is_serializable(v.__dict__)
+                else v
+            )
             for k, v in arguments.items()
             if v is not None and _is_serializable(v)
         }
     except Exception as e:
         _logger.warning(f"Failed to construct inputs: {e}")
         return {}
+
 
 def _is_serializable(value):
     """
@@ -121,6 +129,7 @@ def _is_serializable(value):
         return True
     except (TypeError, ValueError):
         return False
+
 
 def _set_span_attributes(span: LiveSpan, instance):
     """
@@ -137,9 +146,12 @@ def _set_span_attributes(span: LiveSpan, instance):
         # Filter out None values and non-serializable attributes
         for key, value in attributes.items():
             if value is not None and _is_serializable(value):
-                span.set_attribute(key, str(value) if isinstance(value, list) else value)
+                span.set_attribute(
+                    key, str(value) if isinstance(value, list) else value
+                )
     except Exception as e:
         _logger.warning(f"Failed to set span attributes: {e}")
+
 
 def _process_outputs(result):
     """
@@ -159,6 +171,7 @@ def _process_outputs(result):
     except Exception as e:
         _logger.warning(f"Failed to process outputs: {e}")
         return str(result)
+
 
 def _set_chat_attributes(span: LiveSpan, query: str, output: str):
     """

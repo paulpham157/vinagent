@@ -33,5 +33,6 @@ async def load_mcp_prompt(
     """Load MCP prompt and convert to LangChain messages."""
     response = await session.get_prompt(name, arguments)
     return [
-        convert_mcp_prompt_message_to_langchain_message(message) for message in response.messages
+        convert_mcp_prompt_message_to_langchain_message(message)
+        for message in response.messages
     ]

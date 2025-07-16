@@ -103,7 +103,9 @@ class WebsocketConnection(TypedDict):
     """Additional keyword arguments to pass to the ClientSession"""
 
 
-Connection = StdioConnection | SSEConnection | StreamableHttpConnection | WebsocketConnection
+Connection = (
+    StdioConnection | SSEConnection | StreamableHttpConnection | WebsocketConnection
+)
 
 
 @asynccontextmanager
@@ -114,7 +116,9 @@ async def _create_stdio_session(
     env: dict[str, str] | None = None,
     cwd: str | Path | None = None,
     encoding: str = DEFAULT_ENCODING,
-    encoding_error_handler: Literal["strict", "ignore", "replace"] = DEFAULT_ENCODING_ERROR_HANDLER,
+    encoding_error_handler: Literal[
+        "strict", "ignore", "replace"
+    ] = DEFAULT_ENCODING_ERROR_HANDLER,
     session_kwargs: dict[str, Any] | None = None,
 ) -> AsyncIterator[ClientSession]:
     """Create a new session to an MCP server using stdio
@@ -255,13 +259,17 @@ async def create_session(
             url=connection["url"],
             headers=connection.get("headers"),
             timeout=connection.get("timeout", DEFAULT_HTTP_TIMEOUT),
-            sse_read_timeout=connection.get("sse_read_timeout", DEFAULT_SSE_READ_TIMEOUT),
+            sse_read_timeout=connection.get(
+                "sse_read_timeout", DEFAULT_SSE_READ_TIMEOUT
+            ),
             session_kwargs=connection.get("session_kwargs"),
         ) as session:
             yield session
     elif transport == "streamable_http":
         if "url" not in connection:
-            raise ValueError("'url' parameter is required for Streamable HTTP connection")
+            raise ValueError(
+                "'url' parameter is required for Streamable HTTP connection"
+            )
         async with _create_streamable_http_session(
             url=connection["url"],
             headers=connection.get("headers"),

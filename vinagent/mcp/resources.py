@@ -47,7 +47,8 @@ async def get_mcp_resource(session: ClientSession, uri: str) -> list[Blob]:
         return []
 
     return [
-        convert_mcp_resource_to_langchain_blob(uri, content) for content in contents_result.contents
+        convert_mcp_resource_to_langchain_blob(uri, content)
+        for content in contents_result.contents
     ]
 
 
