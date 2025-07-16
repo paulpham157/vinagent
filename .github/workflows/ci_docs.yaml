@@ -27,12 +27,12 @@ jobs:
         run: |
             ls -R
             pwd
+      
       - name: Build MkDocs site
-        working-directory: ./docs
-        run: mkdocs build
+        run: mkdocs serve --config-file docs/mkdocs.ym
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs/site
+          publish_dir: docs/site

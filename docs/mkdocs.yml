@@ -60,7 +60,7 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
-          paths: ["../.."]
+          paths: [".."]
           import:
             - https://docs.python.org/3/objects.inv
           options:
