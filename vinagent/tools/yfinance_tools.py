@@ -3,9 +3,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from typing import Optional
-# from requests_ratelimiter import LimiterSession, RequestRate, Limiter, Duration
-
 
 def fetch_stock_data(
     symbol: str,
@@ -26,7 +23,6 @@ def fetch_stock_data(
         pd.DataFrame: DataFrame containing historical stock prices.
     """
     try:
-        history_rate = RequestRate(1, Duration.SECOND)
         # limiter = Limiter(history_rate)
         # session = LimiterSession(limiter=limiter)
         # session.headers['User-agent'] = 'tickerpicker/1.0'

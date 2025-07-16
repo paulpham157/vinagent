@@ -1,4 +1,4 @@
-# Contributing to agencore
+# Contributing to Vinagent
 
 First off, thanks for taking the time to contribute!
 
@@ -134,7 +134,7 @@ Enhancement suggestions are tracked as [GitHub issues](https://github.com/datasc
 - Provide a **step-by-step description of the suggested enhancement** in as many details as possible.
 - **Describe the current behavior** and **explain which behavior you expected to see instead** and why.
   At this point you can also tell which alternatives do not work for you.
-- **Explain why this enhancement would be useful** to most aisuite users. You may also want to
+- **Explain why this enhancement would be useful** to most Vinagent users. You may also want to
   point out the other projects that solved it better and which could serve as inspiration.
 
 

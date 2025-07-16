@@ -1,6 +1,7 @@
 
-![PyPI](https://img.shields.io/pypi/v/vinagent)
-![Downloads](https://img.shields.io/pypi/dm/vinagent)
+[![Version](https://img.shields.io/pypi/v/vinagent.svg)](https://pypi.org/project/vinagent/)
+[![Downloads](https://static.pepy.tech/badge/vinagent/month)](https://pepy.tech/project/vinagent)
+[![Open Issues](https://img.shields.io/github/issues-raw/datascienceworld-kan/vinagent)](https://github.com/datascienceworld-kan/vinagent/issues)
 ![License](https://img.shields.io/github/license/datascienceworld-kan/vinagent)
 
 # 1. Introduction
@@ -376,7 +377,7 @@ Since 2024, I have participated in Google GDSC and Google I/O as a guest speaker
 """
 
 memory.save_short_term_memory(llm, text_input)
-memory_message = memory.load_memory('string')
+memory_message = memory.load_memory_by_user('string')
 memory_message
 ```
 
