@@ -13,6 +13,98 @@ Whether you're creating an AI-powered customer service bot, a data analysis assi
 
 With its modular tool system, you can easily extend your agent's capabilities by integrating a wide range of tools. Each tool is self-contained, well-documented, and can be registered dynamically—making it effortless to scale and adapt your agent to new tasks or environments.
 
+## Feature comparison
+<table style="width: 100%;">
+    <tr>
+      <th align="center">Feature</th>
+      <th align="center">Vinagent</th>
+      <th align="center">Dify.AI</th>
+      <th align="center">LangChain</th>
+      <th align="center">Flowise</th>
+      <th align="center">OpenAI Assistants API</th>
+    </tr>
+    <tr>
+      <td align="center">Programming Approach</td>
+      <td align="center">Python Code</td>
+      <td align="center">API + App-oriented</td>
+      <td align="center">Python Code</td>
+      <td align="center">App-oriented</td>
+      <td align="center">API-oriented</td>
+    </tr>
+    <tr>
+      <td align="center">Supported LLMs</td>
+      <td align="center">Rich Variety</td>
+      <td align="center">Rich Variety</td>
+      <td align="center">Rich Variety</td>
+      <td align="center">Rich Variety</td>
+      <td align="center">OpenAI-only</td>
+    </tr>
+    <tr>
+      <td align="center">Agent</td>
+      <td align="center">✅</td>
+      <td align="center">✅</td>
+      <td align="center">✅</td>
+      <td align="center">❌</td>
+      <td align="center">✅</td>
+    </tr>
+    <tr>
+      <td align="center">Workflow</td>
+      <td align="center">✅</td>
+      <td align="center">✅</td>
+      <td align="center">❌</td>
+      <td align="center">✅</td>
+      <td align="center">❌</td>
+    </tr>
+    <tr>
+        <td align="center">Graph Memory</td>
+        <td align="center">✅</td>
+        <td align="center">❌</td>
+        <td align="center">❌</td>
+        <td align="center">❌</td>
+        <td align="center">❌</td>
+    </tr>
+    <tr>
+        <td align="center">Personalize</td>
+        <td align="center">✅</td>
+        <td align="center">❌</td>
+        <td align="center">❌</td>
+        <td align="center">❌</td>
+        <td align="center">❌</td>
+    </tr>
+    <tr>
+        <td align="center">RAG Engine</td>
+        <td align="center">✅</td>
+        <td align="center">✅</td>
+        <td align="center">✅</td>
+        <td align="center">✅</td>
+        <td align="center">✅</td>
+    </tr>
+    <tr>
+        <td align="center">MCP Connection</td>
+        <td align="center">✅</td>
+        <td align="center">✅</td>
+        <td align="center">✅</td>
+        <td align="center">✅</td>
+        <td align="center">✅</td>
+      </tr>
+    <tr>
+      <td align="center">Observability</td>
+      <td align="center">✅</td>
+      <td align="center">✅</td>
+      <td align="center">✅</td>
+      <td align="center">❌</td>
+      <td align="center">❌</td>
+    </tr>
+    <tr>
+      <td align="center">Local Deployment</td>
+      <td align="center">✅</td>
+      <td align="center">✅</td>
+      <td align="center">✅</td>
+      <td align="center">✅</td>
+      <td align="center">❌</td>
+    </tr>
+  </table>
+
 ## Extraordinary benefits 
 
 `Vinagent` helps design AI Agents to solve various tasks across multiple fields such as Financial and Banking, Healthcare, Manufacturing, and Autonomous Systems. The strength of Vinagent lies in its focus on a library for designing agents with simple syntax and upgrading agents with all the components of a modern Agent design. What do these designs have to make Vinagent different?
