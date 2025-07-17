@@ -113,7 +113,7 @@ With its modular tool system, you can easily extend your agent's capabilities by
 
 `Vinagent` helps design AI agents to solve various tasks across multiple domains such as Finance and Banking, Healthcare, Manufacturing, and Autonomous Systems. It provides a comprehensive set of components for building agents, including: Model, Tool, Graph Memory, Workflow, and Observability.
 
-![](/asset/agent_system_design.png)
+![](asset/agent_system_design.png)
 
 The following are specifically designed components:
 
