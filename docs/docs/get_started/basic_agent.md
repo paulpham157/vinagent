@@ -22,7 +22,7 @@ poetry install
 You can install the stable distributed versions which are tested and distributed on pypi.org channel by pip command
 
 ```
-pip install vinagent=='Put_Your_Version'
+pip install vinagent
 ```
 
 ## Prerequisites

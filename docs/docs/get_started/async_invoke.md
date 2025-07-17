@@ -68,8 +68,7 @@ print(message.content)
 
 This is a performance benchmarking table based on 100 requests to [meta-llama/Llama-3.3-70B-Instruct-Turbo-Free](https://api.together.ai/models/meta-llama/Llama-3.3-70B-Instruct-Turbo-Free) on TogetherAI. It demonstrates that the latency of `ainvoke` is nearly twice as fast as `invoke`. You may get different results due to the randomness of the requests and state of LLM-provider server.
 
-
-| Number of requests | `invoke` (sec/req) | `ainvoke` (req/req) |
+| Number of requests | `ainvoke` (sec/req) | `invoke` (sec/req) |
 |--------------------|---------------------|----------------------|
 | 100                | 8.05-11.72          | 15.03-18.47          |
 

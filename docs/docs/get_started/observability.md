@@ -2,13 +2,15 @@
 
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/datascienceworld-kan/vinagent-docs/blob/main/docs/tutorials/get_started/observability.ipynb)
 
-Vinagent provides a local MLflow dashboard that can be used to visualize the intermediate messsages of each query. Therefore, it is an important feature for debugging.
+Vinagent integrates with a local MLflow dashboard that can be used to visualize the intermediate messsages of each query. Therefore, it is an important feature for debugging.
 
 - Engineer can trace the number of tokens, execution time, type of tool, and status of exection.
-- Based on tracked results, Agent developers can indentify inefficient steps, optimize agent components like tools, prompts, agent description, agent skills, and LLM model.
+- Based on tracked results, Agent developers can indentify inefficient steps. Afterwards, optimize agent components like tools, prompts, agent description, agent skills, and LLM model.
 - Accelerate process of debugging and improving the agent's performance.
 
+Local tracing and observability ensure system security and data privacy, as your agent states are not dispatched outside your on-premise system. A local server can be quickly set up without creating an account, helping to reduce costs and accelerate the profiling process. Furthermore, Vinagent allows users to intervene in the logging states by adjusting the `vinagent.mlflow.autolog` code, enabling the addition of more state fields as needed.
 
+Let's install vinagent library for this tutorial.
 
 ```python
 %pip install vinagent

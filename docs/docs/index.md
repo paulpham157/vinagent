@@ -4,14 +4,16 @@ title: Vinagent
 ---
 
 [![Version](https://img.shields.io/pypi/v/vinagent.svg)](https://pypi.org/project/vinagent/)
+[![PyPI Downloads](https://static.pepy.tech/badge/vinagent/week)](https://pepy.tech/projects/vinagent)
 [![Downloads](https://static.pepy.tech/badge/vinagent/month)](https://pepy.tech/project/vinagent)
+[![PyPI Downloads](https://static.pepy.tech/badge/vinagent)](https://pepy.tech/projects/vinagent)
 [![Reddit r/vinagent](https://img.shields.io/badge/Reddit-r%2Fvinagent-orange?logo=reddit&logoColor=white)](https://www.reddit.com/r/vinagent/)
 [![Discord](https://img.shields.io/badge/Chat-Discord-5865F2?logo=discord&logoColor=white)](https://discord.com/channels/1036147288994758717/1358017320970358864)
 ![License](https://img.shields.io/github/license/datascienceworld-kan/vinagent)
 
-`Vinagent` is a simple and flexible library designed for building smart agent assistants across various industries. Vinagent towards the AI in multiple-industries, distinguishing with other agent library by its simplicity, integrability, observability, and optimizablity.
+`Vinagent` is a simple and flexible library designed for building smart agent assistants across various industries. Vinagent towards the AI in multiple-industries like Financial and Banking, Healthcare, Manufacturing, and Autonomous Systems. It is designed based on simplicity, integrability, observability, and optimizablity. Vinagent features a clean syntax, supports individual customization, enhances capabilities through integration with multiple tools, and effectively handles complex tasks through curated workflow creation.
 
-Whether you're creating an AI-powered customer service bot, a data analysis assistant, or a domain-specific automation agent, vinagent provides a simple yet powerful foundation.
+Whether you're creating an AI-powered deep search smart assistant, a financial analysis agent, or any domain-specific automation agent, Vinagent provides a simple yet powerful foundation.
 
 With its modular tool system, you can easily extend your agent's capabilities by integrating a wide range of tools. Each tool is self-contained, well-documented, and can be registered dynamically—making it effortless to scale and adapt your agent to new tasks or environments.
 
@@ -107,9 +109,13 @@ With its modular tool system, you can easily extend your agent's capabilities by
     </tr>
   </table>
 
-## Extraordinary benefits 
+## Component Overview
 
-`Vinagent` helps design AI Agents to solve various tasks across multiple fields such as Financial and Banking, Healthcare, Manufacturing, and Autonomous Systems. The strength of Vinagent lies in its focus on a library for designing agents with simple syntax and upgrading agents with all the components of a modern Agent design. What do these designs have to make Vinagent different?
+`Vinagent` helps design AI agents to solve various tasks across multiple domains such as Finance and Banking, Healthcare, Manufacturing, and Autonomous Systems. It provides a comprehensive set of components for building agents, including: Model, Tool, Graph Memory, Workflow, and Observability.
+
+![](/asset/agent_system_design.png)
+
+The following are specifically designed components:
 
 - **Tools**: Supports a variety of different tools, from user-implemented tools like Function tool and Module tool, to tools from the MCP market. Thus, Vinagent ensures you always have all the necessary features and data for every task.
 
@@ -117,7 +123,7 @@ With its modular tool system, you can easily extend your agent's capabilities by
 
 - **Planning and Control**: Based on the graph foundation of Langgraph, Vinagent designs workflows with simpler syntax, using the right shift `>>` operator, which is easy to use for beginers. This makes creating and managing complex workflows much simpler compared to other agent workflow libraries, even for a complex conditional and parallel workflows.
 
-- **Improving user Experience**: Vinagent supports inference through three methods: asynchronous, synchronous, and streaming. This flexibility allows you to speed up processing and improve user experience when applying agents in AI products that require fast and immediate processing speeds.
+- **Personalize user Experience**: Vinagent supports inference through three methods: asynchronous, synchronous, and streaming. This flexibility allows you to speed up processing and improve user experience when applying agents in AI products that require fast and immediate processing speeds.
 
 - **Prompt Optimization**: Vinagent integrates automatic prompt optimization features, enhancing accuracy for Agents. This ensures the Agent operates effectively even with specialized tasks.
 Observability: Allows monitoring of the Agent’s processing information on-premise and is compatible with Jupyter Notebook. You can measure total processing time, the number of input/output tokens, as well as LLM model information at each step in the workflow. This detailed observability feature is crucial for debugging and optimizing the Agent.
