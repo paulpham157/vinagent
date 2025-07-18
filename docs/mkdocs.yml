@@ -42,10 +42,13 @@ nav:
       - Run local ReactJS App: get_started/local_run.md
     - Agent Development:
       - Workflow & Agent: get_started/workflow_and_agent.md
+      - Agent RAG: get_started/agent_rag.md
   - Guidelines: 
     - Financial Usercase:
       - Visualize and Analyze Stock: guides/analyze_stock_trending.md
       - Find Trending New: guides/trending_news.md
+    - RAG:
+      - Agent RAG: get_started/agent_rag.md
   - Reference: 
     - Agent: reference/agent.md
     - Tool: reference/tool.md
