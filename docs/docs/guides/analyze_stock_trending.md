@@ -23,7 +23,7 @@ TOGETHER_API_KEY=your_api_key
 TAVILY_API_KEY=your_tavily_api_key
 ```
 
-## Desing Financial Tool
+## Design Financial Tool
 
 You can create an module and save at `vinagent.tools.yfinance_tools.py` with following methods:
 - `fetch_stock_data`: crawl financial data from Yahoo Finance

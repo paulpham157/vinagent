@@ -33,7 +33,7 @@ nav:
     - index.md
     - Quick Start:
       - Start with basic Agent: get_started/basic_agent.md
-      - Build a custom: 
+      - Build a customization: 
         - 1. Add tools: get_started/add_tool.md
         - 2. Add memory: get_started/add_memory.md
         - 3. Async Invoking: get_started/async_invoke.md
