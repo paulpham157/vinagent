@@ -112,6 +112,7 @@ message_user = memory.load_memory_by_user(load_type='list', user_id="Kan")
 ```python
 message_user
 ```
+
     [{
           "head": "Kan",
           "head_type": "Person",
@@ -187,32 +188,33 @@ A new information is saved into memory about Mr. Kan is the leader of Vinagent p
 ```
 !cat templates/memory.jsonl
 ```
+
     {
       "Kan": [
-        {
-            "head": "Kan",
-            "head_type": "Person",
-            "relation": "PARTICIPATED_IN",
-            "relation_properties": "since 2024",
-            "tail": "Google I/O",
-            "tail_type": "Event"
-        },
-        {
-            "head": "Kan",
-            "head_type": "Person",
-            "relation": "HAS_MOTTO",
-            "relation_properties": "",
-            "tail": "Make the world better with data and models",
-            "tail_type": "Motto"
-        },
-        {
-            "head": "Kan",
-            "head_type": "Person",
-            "relation": "LEADS",
-            "relation_properties": "",
-            "tail": "Vinagent project",
-            "tail_type": "Project"
-        }
+          {
+              "head": "Kan",
+              "head_type": "Person",
+              "relation": "PARTICIPATED_IN",
+              "relation_properties": "since 2024",
+              "tail": "Google I/O",
+              "tail_type": "Event"
+          },
+          {
+              "head": "Kan",
+              "head_type": "Person",
+              "relation": "HAS_MOTTO",
+              "relation_properties": "",
+              "tail": "Make the world better with data and models",
+              "tail_type": "Motto"
+          },
+          {
+              "head": "Kan",
+              "head_type": "Person",
+              "relation": "LEADS",
+              "relation_properties": "",
+              "tail": "Vinagent project",
+              "tail_type": "Project"
+          }
       ]
     }
 
