@@ -139,7 +139,7 @@ Therefore, Agent can utilize this personalized graph-based memory to provide mor
 
 This feature allows to adhere `Memory` for each `Agent`. This is useful when you want to keep track of the user's behavior and conceptualize knowledge as a graph. As a result, it helps agent become more intelligent and capable of understanding personality and responding to user queries with greater accuracy.
 
-We structure our memory as a dictionary, where each key represents a user identifier. This memory is then injected into the Agent during initialization by setting `memory_path="your_memory_path.jsonl"`.
+We structure our memory as a dictionary, where each key represents a user identifier. This memory is then injected into the Agent during initialization by setting `memory_path="your_memory_path.jsonl"` as a long-term memory.
 
 Asking agent with user_id = 'Kan'
 
@@ -177,7 +177,7 @@ message.content
 ```
   "Kan's motto is Make the world better with data and models."
 
-You can save each Agent message to the Graph Memory by set `is_save_memory=True`.
+Each message in the conversation is considered as a short-term memory. You can save them to long-term memory under the Graph form by setting `is_save_memory=True`.
 
 ```
 message = agent.invoke("Hi, I'm Kan, who is a leader of Vinagent project", user_id="Kan", is_save_memory=True)
