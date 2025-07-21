@@ -246,7 +246,7 @@ class Agent(AgentMeta):
 
         memory = ""
         if self.memory:
-            memory_content = self.memory.load_memory(
+            memory_content = self.memory.load_memory_by_user(
                 load_type="string", user_id=user_id
             )
             if memory_content:

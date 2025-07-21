@@ -116,28 +116,109 @@ message_user
 
 
 
-    [{'head': 'Kan',
-      'head_type': 'Person',
-      'relation': 'BORN_IN',
-      'relation_properties': 'in 1993',
-      'tail': 'Thanh Hoa Province, Vietnam',
-      'tail_type': 'Location'},
-     {'head': 'Kan',
-      'head_type': 'Person',
-      'relation': 'WORKS_FOR',
-      'relation_properties': 'since 2021',
-      'tail': 'FPT Software',
-      'tail_type': 'Company'},
-     {'head': 'Kan',
-      'head_type': 'Person',
-      'relation': 'WORKS_FOR',
-      'relation_properties': 'since 2022',
-      'tail': 'NEU',
-      'tail_type': 'University'},
+    [{
+          "head": "Kan",
+          "head_type": "Person",
+          "relation": "PARTICIPATED_IN",
+          "relation_properties": "since 2024",
+          "tail": "Google I/O",
+          "tail_type": "Event"
+      },
+      {
+          "head": "Kan",
+          "head_type": "Person",
+          "relation": "HAS_MOTTO",
+          "relation_properties": "",
+          "tail": "Make the world better with data and models",
+          "tail_type": "Motto"
+      },
       ...
     ]
 
 Therefore, Agent can utilize this personalized graph-based memory to provide more accurate and relevant responses, which align with user's preferences.
+
+
+## Agent with memory
+
+This feature allows to adhere `Memory` for each `Agent`. This is useful when you want to keep track of the user's behavior and conceptualize knowledge as a graph. As a result, it helps agent become more intelligent and capable of understanding personality and responding to user queries with greater accuracy.
+
+We structure our memory as a dictionary, where each key represents a user identifier. This memory is then injected into the Agent during initialization by setting `memory_path="your_memory_path.jsonl"`.
+
+Asking agent with user_id = 'Kan'
+
+```
+import os
+import sys
+from langchain_together import ChatTogether 
+from vinagent.agent import Agent
+from vinagent.memory.memory import Memory
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
+
+llm = ChatTogether(
+    model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+)
+
+# Step 1: Create Agent with tools
+agent = Agent(
+    llm = llm,
+    description="You are my close friend",
+    skills=[
+        "You can remember all memory related to us",
+        "You can remind the memory to answer questions",
+        "You can remember the history of our relationship"
+    ],
+    memory_path='templates/memory.jsonl',
+    is_reset_memory=False # If True, reset memory each time re-initialize agent, else use existing memory
+)
+
+# Step 2: invoke the agent
+message = agent.invoke("What is your Motto?", user_id="Kan")
+message.content
+```
+  "Kan's motto is Make the world better with data and models."
+
+You can save each Agent message to the Graph Memory by set `is_save_memory=True`.
+
+```
+message = agent.invoke("Hi, I'm Kan, who is a leader of Vinagent project", user_id="Kan", is_save_memory=True)
+```
+
+A new information is saved into memory about Mr. Kan is the leader of Vinagent project.
+
+```
+!cat templates/memory.jsonl
+```
+  {
+      "Kan": [
+          {
+              "head": "Kan",
+              "head_type": "Person",
+              "relation": "PARTICIPATED_IN",
+              "relation_properties": "since 2024",
+              "tail": "Google I/O",
+              "tail_type": "Event"
+          },
+          {
+              "head": "Kan",
+              "head_type": "Person",
+              "relation": "HAS_MOTTO",
+              "relation_properties": "",
+              "tail": "Make the world better with data and models",
+              "tail_type": "Motto"
+          },
+          {
+              "head": "Kan",
+              "head_type": "Person",
+              "relation": "LEADS",
+              "relation_properties": "",
+              "tail": "Vinagent project",
+              "tail_type": "Project"
+          }
+      ]
+  }
 
 ## Visualize on Neo4j
 
@@ -231,5 +312,3 @@ client.visualize_graph(output_file="my_graph.html", show_in_browser=True)
 ```
 
 ![Graph Memory](../images/my_graph.png)
-
-
