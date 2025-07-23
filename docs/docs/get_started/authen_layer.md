@@ -32,7 +32,15 @@ Examine the generated user data:
 !cat authen/secret.json
 ```
 
-    {"secret_key": "171d7a898dfcd817742364fac151dfce7328f0c88b720909279627ec5cd93197", "username": "Kan", "password": "password123", "hashed_password": "$2b$12$qGDJKEn.86b7Ol21M2J3fOG0BNKVXmQYpssdImOI73ZV.t7PEPwE2", "algorithm": "HS256", "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJoYXNoZWRfcGFzc3dvcmQiOiIkMmIkMTIkcUdESktFbi44NmI3T2wyMU0ySjNmT0cwQk5LVlhtUVlwc3NkSW1PSTczWlYudDdQRVB3RTIiLCJleHAiOjE3NTMyMDQ3MzksImlhdCI6MTc1MzIwMTEzOX0.OLnzrupahZGyi3d4C3LdDhpaTuaW1_mCMxl4e91Li0s", "api_url": "http://localhost:8000/verify-token"}
+    {
+        "secret_key": "171d7a898dfcd817742364fac151dfce7328f0c88b720909279627ec5cd93197", 
+        "username": "Kan", 
+        "password": "password123", 
+        "hashed_password": "$2b$12$qGDJKEn.86b7Ol21M2J3fOG0BNKVXmQYpssdImOI73ZV.t7PEPwE2", 
+        "algorithm": "HS256", 
+        "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJoYXNoZWRfcGFzc3dvcmQiOiIkMmIkMTIkcUdESktFbi44NmI3T2wyMU0ySjNmT0cwQk5LVlhtUVlwc3NkSW1PSTczWlYudDdQRVB3RTIiLCJleHAiOjE3NTMyMDQ3MzksImlhdCI6MTc1MzIwMTEzOX0.OLnzrupahZGyi3d4C3LdDhpaTuaW1_mCMxl4e91Li0s", 
+        "api_url": "http://localhost:8000/verify-token"
+    }
 
 ## OAuth2 Server
 
