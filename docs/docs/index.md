@@ -113,7 +113,7 @@ With its modular tool system, you can easily extend your agent's capabilities by
 
 `Vinagent` helps design AI agents to solve various tasks across multiple domains such as Finance and Banking, Healthcare, Manufacturing, and Autonomous Systems. It provides a comprehensive set of components for building agents, including: Model, Tool, Graph Memory, Workflow, and Observability.
 
-![](asset/agent_system_design.png)
+![](asset/agent_system_design_v2.png)
 
 The following are specifically designed components:
 
@@ -125,8 +125,11 @@ The following are specifically designed components:
 
 - **Personalize user Experience**: Vinagent supports inference through three methods: asynchronous, synchronous, and streaming. This flexibility allows you to speed up processing and improve user experience when applying agents in AI products that require fast and immediate processing speeds.
 
+- **Security**: Vinagent ensures AI Agent security through OAuth 2.0 authentication, a protocol that allows third-party applications to access Agent resources without exposing any user's credentials. This approach uses access token instread of direct user/password authentication. It works by orchestrating these participants.
+
 - **Prompt Optimization**: Vinagent integrates automatic prompt optimization features, enhancing accuracy for Agents. This ensures the Agent operates effectively even with specialized tasks.
 Observability: Allows monitoring of the Agent’s processing information on-premise and is compatible with Jupyter Notebook. You can measure total processing time, the number of input/output tokens, as well as LLM model information at each step in the workflow. This detailed observability feature is crucial for debugging and optimizing the Agent.
+
 
 ## Vinagent ecosystem
 

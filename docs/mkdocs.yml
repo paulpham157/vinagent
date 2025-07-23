@@ -38,7 +38,8 @@ nav:
         - 2. Add memory: get_started/add_memory.md
         - 3. Async Invoking: get_started/async_invoke.md
         - 4. Streaming: get_started/streaming.md
-        - 5. Observability: get_started/observability.md
+        - 5. Security: get_started/authen_layer.md
+        - 6. Observability: get_started/observability.md
       - Run local ReactJS App: get_started/local_run.md
     - Agent Development:
       - Workflow & Agent: get_started/workflow_and_agent.md

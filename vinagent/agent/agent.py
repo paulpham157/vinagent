@@ -22,6 +22,7 @@ from vinagent.register.tool import ToolManager
 from vinagent.memory.memory import Memory
 from vinagent.mcp.client import DistributedMCPClient
 from vinagent.graph.function_graph import FunctionStateGraph
+from vinagent.oauth2.client import AuthenCard
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -91,6 +92,7 @@ class Agent(AgentMeta):
         mcp_client: DistributedMCPClient = None,
         mcp_server_name: str = None,
         is_pii: bool = False,
+        authen_card: AuthenCard = None,
         *args,
         **kwargs,
     ):
@@ -133,6 +135,9 @@ class Agent(AgentMeta):
 
         is_pii: bool, optional
             A flag indicating whether the assistant should be able to recognize a person who is chatting with. Defaults to False.
+
+        authen_card: AuthenCard, optional
+            An instance of AuthenCard used to authenticate the assistant. Defaults to None.
 
         *args, **kwargs : Any
             Additional arguments passed to the superclass or future extensions.
@@ -189,6 +194,18 @@ class Agent(AgentMeta):
         self._user_id = None
         if not self.is_pii:
             self._user_id = "unknown_user"
+        
+        # OAuth2 authentication if enabled
+        self.authen_card = authen_card
+
+    def authenticate(self):
+        is_enable_access = self.authen_card.verify_access_token()
+        if is_enable_access:
+            logger.info(f"Successfully authenticated!")
+        else:
+            logger.info(f"Authentication failed!")
+            raise Exception("Authentication failed!")
+        return is_enable_access
 
     async def connect_mcp_tool(self):
         logger.info(f"{self.mcp_client}: {self.mcp_server_name}")
@@ -295,11 +312,30 @@ class Agent(AgentMeta):
         query: str,
         is_save_memory: bool = False,
         user_id: str = "unknown_user",
+        token: str = None,
+        secret_key: str = None,
         **kwargs,
     ) -> Any:
         """
-        Select and execute a tool based on the task description
+        Answer the user query synchronously.
+
+        Args:
+            query (str): The input query or task description provided by the user.
+            is_save_memory (bool, optional): Flag to determine if the conversation should be saved to memory. Defaults to False.
+            user_id (str, optional): Identifier for the user making the request. Defaults to "unknown_user".
+            token (str, optional): Authentication token for the user. Defaults to None.
+            secret_key (str, optional): Secret key for authentication. Defaults to None.
+            **kwargs: Additional keyword arguments, including an optional `config` dictionary for graph execution.
+
+        Returns:
+            Any: The result of the tool execution, LLM response, or None if an error occurs during tool execution.
+
+        Raises:
+            json.JSONDecodeError: If the tool data cannot be parsed as valid JSON.
+            KeyError: If required keys are missing in the tool data.
+            ValueError: If the tool data is invalid or cannot be processed.
         """
+        self.authenticate()
         if self._user_id:
             pass
         if user_id:  # user clarify their name
@@ -369,12 +405,30 @@ class Agent(AgentMeta):
         query: str,
         is_save_memory: bool = False,
         user_id: str = "unknown_user",
+        token: str = None,
+        secret_key: str = None,
         **kwargs,
     ) -> AsyncGenerator[Any, None]:
         """
-        Select and execute a tool based on the task description, using streaming.
-        Yields streamed responses or the final tool execution result.
+        Answer the user query by streaming. Yields streamed responses or the final tool execution result.
+
+        Args:
+            query (str): The input query or task description provided by the user.
+            is_save_memory (bool, optional): Flag to determine if the conversation should be saved to memory. Defaults to False.
+            user_id (str, optional): Identifier for the user making the request. Defaults to "unknown_user".
+            token (str, optional): Authentication token for the user. Defaults to None.
+            secret_key (str, optional): Secret key for authentication. Defaults to None.
+            **kwargs: Additional keyword arguments, including an optional `config` dictionary for graph execution.
+
+        Returns:
+            Any: The result of the tool execution, LLM response, or None if an error occurs during tool execution.
+
+        Raises:
+            json.JSONDecodeError: If the tool data cannot be parsed as valid JSON.
+            KeyError: If required keys are missing in the tool data.
+            ValueError: If the tool data is invalid or cannot be processed.
         """
+        self.authenticate()
         if not self._user_id:
             self._user_id = user_id
         logger.info(f"I am chatting with {self._user_id}")
@@ -451,11 +505,29 @@ class Agent(AgentMeta):
         query: str,
         is_save_memory: bool = False,
         user_id: str = "unknown_user",
+        token: str = None,
+        secret_key: str = None,
         **kwargs,
     ) -> Any:
         """
-        Select and execute a tool based on the task description
+        Answer the user query asynchronously.
+        Args:
+            query (str): The input query or task description provided by the user.
+            is_save_memory (bool, optional): Flag to determine if the conversation should be saved to memory. Defaults to False.
+            user_id (str, optional): Identifier for the user making the request. Defaults to "unknown_user".
+            token (str, optional): Authentication token for the user. Defaults to None.
+            secret_key (str, optional): Secret key for authentication. Defaults to None.
+            **kwargs: Additional keyword arguments, including an optional `config` dictionary for graph execution.
+
+        Returns:
+            Any: The result of the tool execution, LLM response, or None if an error occurs during tool execution.
+
+        Raises:
+            json.JSONDecodeError: If the tool data cannot be parsed as valid JSON.
+            KeyError: If required keys are missing in the tool data.
+            ValueError: If the tool data is invalid or cannot be processed.
         """
+        self.authenticate()
         if self._user_id:
             pass
         else:  # user clarify their name
