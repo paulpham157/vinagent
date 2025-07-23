@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./asset/vinagent.png" alt="Vinagent Logo" width="300px" />
+  <img src="asset/vinagent.png" alt="Vinagent Logo" width="300px" />
 </p>
 
 [![Version](https://img.shields.io/pypi/v/vinagent.svg)](https://pypi.org/project/vinagent/)
