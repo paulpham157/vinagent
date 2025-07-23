@@ -9,7 +9,6 @@
 [![Reddit r/vinagent](https://img.shields.io/badge/Reddit-r%2Fvinagent-orange?logo=reddit&logoColor=white)](https://www.reddit.com/r/vinagent/)
 [![Discord](https://img.shields.io/badge/Chat-Discord-5865F2?logo=discord&logoColor=white)](https://discord.com/channels/1036147288994758717/1358017320970358864)
 ![License](https://img.shields.io/github/license/datascienceworld-kan/vinagent)
-[![Open Issues](https://img.shields.io/github/issues-raw/datascienceworld-kan/vinagent)](https://github.com/datascienceworld-kan/vinagent/issues)
 
 # 1. Introduction
 
