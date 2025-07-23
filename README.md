@@ -1,3 +1,6 @@
+<p align="center">
+  <img src="asset/vinagent.png" alt="Vinagent Logo" width="300px" />
+</p>
 
 [![Version](https://img.shields.io/pypi/v/vinagent.svg)](https://pypi.org/project/vinagent/)
 [![PyPI Downloads](https://static.pepy.tech/badge/vinagent/week)](https://pepy.tech/projects/vinagent)
