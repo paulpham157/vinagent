@@ -13,7 +13,7 @@ The authentication system involves four key participants:
 - Resource Server (AI Agent): Hosts the protected resource, here is Agent inference ability.
 - User: The owner of the resource who grants permission.
 
-![](/Users/phamdinhkhanh/Documents/Courses/Manus/vinagent/docs/docs/get_started/images/OAuth2.png)
+![](../images/OAuth2.png)
 
 ## Setup OAuth2
 
