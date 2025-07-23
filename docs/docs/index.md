@@ -92,6 +92,14 @@ With its modular tool system, you can easily extend your agent's capabilities by
         <td align="center">✅</td>
       </tr>
     <tr>
+      <td align="center">Security</td>
+      <td align="center">✅</td>
+      <td align="center">❌</td>
+      <td align="center">❌</td>
+      <td align="center">❌</td>
+      <td align="center">❌</td>
+    </tr>
+    <tr>
       <td align="center">Observability</td>
       <td align="center">✅</td>
       <td align="center">✅</td>
