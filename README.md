@@ -17,7 +17,7 @@
 
 With its modular tool system, you can easily extend your agent's capabilities by integrating a wide range of tools. Each tool is self-contained, well-documented, and can be registered dynamically—making it effortless to scale and adapt your agent to new tasks or environments.
 
-![](asset/agent_system_design.png)
+![](asset/agent_system_design_v2.png)
 
 To install and use this library please following:
 
