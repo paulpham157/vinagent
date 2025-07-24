@@ -10,11 +10,12 @@ import ast
 import uuid
 from pathlib import Path
 import shutil
-from .initialize import llm
 from vinagent.mcp import load_mcp_tools
 from vinagent.mcp.client import DistributedMCPClient
 from langchain_core.messages.tool import ToolMessage
+from langchain_core.language_models.base import BaseLanguageModel
 import asyncio
+import re
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -29,6 +30,7 @@ class ToolManager:
 
     def __init__(
         self,
+        llm: BaseLanguageModel,
         tools_path: Path = Path("templates/tools.json"),
         is_reset_tools: bool = False,
     ):
@@ -36,6 +38,7 @@ class ToolManager:
         Initialize the ToolManager with a path to the tools JSON file.
 
         Args:
+            llm (BaseLanguageModel): Language model instance for tool analysis.
             tools_path (Path, optional): Path to the JSON file for storing tools. Defaults to Path("templates/tools.json").
             is_reset_tools (bool, optional): If True, resets the tools file to an empty JSON object. Defaults to False.
 
@@ -44,6 +47,7 @@ class ToolManager:
             - Creates the tools file if it does not exist.
             - Resets the tools file if is_reset_tools is True.
         """
+        self.llm = llm
         self.tools_path = tools_path
         self.is_reset_tools = is_reset_tools
         self.tools_path = (
@@ -259,12 +263,88 @@ class ToolManager:
             "}}]\n"
         )
 
-        response = llm.invoke(prompt)
+        response = self.llm.invoke(prompt)
 
+        response_text = response.content.strip()
+
+        # Remove markdown code fences if present
+        if response_text.startswith("```"):
+            # Remove the first line (```json or ```)
+            response_lines = response_text.splitlines()
+            # Skip first line if it starts with ```
+            if response_lines[0].startswith("```"):
+                response_lines = response_lines[1:]
+            # Remove last line if it's ```
+            if response_lines and response_lines[-1].startswith("```"):
+                response_lines = response_lines[:-1]
+            response_text = "\n".join(response_lines)
+
+        # Attempt to parse the entire text first
         try:
-            new_tools = ast.literal_eval(response.content.strip())
-        except (ValueError, SyntaxError) as e:
-            raise ValueError(f"Invalid tool format from LLM: {str(e)}")
+            new_tools = ast.literal_eval(response_text)
+        except (ValueError, SyntaxError):
+            # Fallback: extract the first JSON object/list from text
+            extracted = self.extract_tool(response_text)
+            if extracted:
+                try:
+                    new_tools = ast.literal_eval(extracted)
+                except (ValueError, SyntaxError) as e:
+                    raise ValueError(
+                        f"Invalid tool format from LLM after extraction: {str(e)}"
+                    )
+            else:
+                raise ValueError(
+                    "Invalid tool format from LLM: could not find valid JSON list"
+                )
+
+        # Ensure new_tools is a list of dictionaries
+        if isinstance(new_tools, dict):
+            new_tools = [new_tools]
+        if not isinstance(new_tools, list):
+            raise ValueError(
+                f"Invalid tool format from LLM: Expected list or dict, got {type(new_tools)}"
+            )
+        for idx, item in enumerate(new_tools):
+            if not isinstance(item, dict):
+                raise ValueError(
+                    f"Invalid tool format from LLM: Element at index {idx} is {type(item)}, expected dict"
+                )
+
+        # Fallback to local introspection if required keys are missing or list is empty
+        REQUIRED_KEYS = {"tool_name", "arguments", "return", "docstring"}
+        def _introspect_module(module_obj, module_path_str):
+            result = []
+            for name, obj in inspect.getmembers(module_obj, inspect.isfunction):
+                if inspect.getmodule(obj) != module_obj:
+                    continue  # Skip imported functions
+                sig = inspect.signature(obj)
+                arguments = {
+                    param_name: (
+                        str(param.annotation) if param.annotation != inspect.Parameter.empty else "Any"
+                    )
+                    for param_name, param in sig.parameters.items()
+                }
+                return_type = (
+                    str(sig.return_annotation)
+                    if sig.return_annotation != inspect.Signature.empty
+                    else "Any"
+                )
+                metadata = {
+                    "tool_name": name,
+                    "arguments": arguments,
+                    "return": return_type,
+                    "docstring": (obj.__doc__ or "").strip(),
+                    "dependencies": [],
+                    "module_path": module_path_str,
+                }
+                result.append(metadata)
+            return result
+
+        if len(new_tools) == 0 or any(not REQUIRED_KEYS.issubset(item.keys()) for item in new_tools):
+            logger.warning(
+                "LLM did not return valid tool metadata, falling back to introspection." 
+            )
+            new_tools = _introspect_module(module, module_path)
 
         tools = self.load_tools()
         for tool in new_tools:
