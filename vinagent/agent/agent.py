@@ -20,6 +20,7 @@ from mlflow.entities import SpanType
 
 from vinagent.register.tool import ToolManager
 from vinagent.memory.memory import Memory
+from vinagent.memory.history import InConversationHistory
 from vinagent.mcp.client import DistributedMCPClient
 from vinagent.graph.function_graph import FunctionStateGraph
 from vinagent.oauth2.client import AuthenCard
@@ -88,7 +89,8 @@ class Agent(AgentMeta):
         state_schema: type[Any] = None,
         config_schema: type[Any] = None,
         memory_path: Path = None,
-        is_reset_memory=False,
+        is_reset_memory: bool = False,
+        num_buffered_messages: int = 10,
         mcp_client: DistributedMCPClient = None,
         mcp_server_name: str = None,
         is_pii: bool = False,
@@ -122,10 +124,13 @@ class Agent(AgentMeta):
             A flag indicating whether the agent should override its existing tools with the provided list of tools. Defaults to False.
 
         memory_path : Path, optional
-            The path to the file containing the memory. Defaults to a template file. Only valid if memory is not None.
+            The path to the file containing the graph memory. Defaults to a template file. Only valid if memory is not None.
 
         is_reset_memory : bool, optional
-            A flag indicating whether the agent should reset its memory when re-initializes it's memory. Defaults to False. Only valid if memory is not None.
+            A flag indicating whether the agent should reset its graph memory when re-initializes it's memory. Defaults to False. Only valid if memory is not None.
+
+        num_buffered_messages: int
+            An buffered memory, which is not stored to memory, just existed in a runtime conversation. Default is a list of last 10 messages.
 
         mcp_client : DistributedMCPClient, optional
             An instance of a DistributedMCPClient used to register tools with the memory. Defaults to None.
@@ -188,13 +193,16 @@ class Agent(AgentMeta):
             self.memory = Memory(
                 memory_path=self.memory_path, is_reset_memory=self.is_reset_memory
             )
+        self.in_conversation_history = InConversationHistory(
+            messages=[], max_length=num_buffered_messages
+        )
 
         # Identify user
         self.is_pii = is_pii
         self._user_id = None
         if not self.is_pii:
             self._user_id = "unknown_user"
-        
+
         # OAuth2 authentication if enabled
         self.authen_card = authen_card
 
@@ -202,7 +210,7 @@ class Agent(AgentMeta):
         if self.authen_card is None:
             logger.info("No authentication card provided, skipping authentication")
             return True
-            
+
         is_enable_access = self.authen_card.verify_access_token()
         if is_enable_access:
             logger.info(f"Successfully authenticated!")
@@ -362,6 +370,7 @@ class Agent(AgentMeta):
                     }  # Default config
                 try:
                     result = self.compiled_graph.invoke(input=query, config=config)
+                    self.in_conversation_history.add_message(result)
                     if self.memory and is_save_memory:
                         self.save_memory(message=result, user_id=self._user_id)
                     return result
@@ -369,16 +378,17 @@ class Agent(AgentMeta):
                     logger.error(f"Error in compiled_graph.invoke: {e}")
             else:
                 # Initialize conversation with original query
-                conversation_history = []
                 current_query = query
                 iteration = 0
-                
+
                 while iteration < max_iterations:
                     iteration += 1
                     logger.info(f"Tool calling iteration {iteration}/{max_iterations}")
-                    
+
                     # Create messages for current iteration
-                    prompt = self.prompt_template(query=current_query, user_id=self._user_id)
+                    prompt = self.prompt_template(
+                        query=current_query, user_id=self._user_id
+                    )
                     skills = "- " + "- ".join(self.skills)
                     messages = [
                         SystemMessage(
@@ -386,19 +396,23 @@ class Agent(AgentMeta):
                         ),
                         HumanMessage(content=prompt),
                     ]
-                    
+
                     # Add conversation history to messages
-                    messages.extend(conversation_history)
-                    
+                    self.in_conversation_history.add_messages(messages)
+
                     # Get LLM response
-                    response = self.llm.invoke(messages)
-                    
+                    history = self.in_conversation_history.get_history()
+                    response = self.llm.invoke(history)
+                    self.in_conversation_history.add_message(response)
+
                     # Extract tool call from response
                     tool_data = self.tools_manager.extract_tool(response.content)
-                    
+
                     # If no tool call is found, return the final response
                     if not tool_data or ("None" in tool_data) or (tool_data == "{}"):
-                        logger.info(f"No more tool calls needed. Completed in {iteration} iterations.")
+                        logger.info(
+                            f"No more tool calls needed. Completed in {iteration} iterations."
+                        )
                         if self.memory and is_save_memory:
                             self.save_memory(message=response, user_id=self._user_id)
                         return response
@@ -406,7 +420,7 @@ class Agent(AgentMeta):
                     # Parse and execute tool call
                     tool_call = json.loads(tool_data)
                     logger.info(f"Executing tool call: {tool_call}")
-                    
+
                     tool_message = asyncio.run(
                         self.tools_manager._execute_tool(
                             tool_name=tool_call["tool_name"],
@@ -417,22 +431,32 @@ class Agent(AgentMeta):
                             mcp_server_name=self.mcp_server_name,
                         )
                     )
-                    
+
                     # Add AI message and tool result to conversation history
-                    conversation_history.append(AIMessage(content=response.content))
-                    conversation_history.append(tool_message)
-                    
+                    self.in_conversation_history.add_message(tool_message)
                     # Prepare next iteration with tool result context
-                    tool_template = self.prompt_tool(current_query, tool_call, tool_message)
+                    tool_template = self.prompt_tool(
+                        current_query, tool_call, tool_message
+                    )
                     current_query = tool_template
-                
+
                 # If we reach max iterations, return the last tool message with a warning
-                logger.warning(f"Reached maximum iterations ({max_iterations}). Stopping tool calling loop.")
-                final_message = self.llm.invoke(f"Based on the previous tool executions, please provide a final response to: {query}")
-                
+                logger.warning(
+                    f"Reached maximum iterations ({max_iterations}). Stopping tool calling loop."
+                )
+
+                user_query = HumanMessage(
+                    content=f"Based on the previous tool executions, please provide a final response to: {query}"
+                )
+                self.in_conversation_history.add_message(user_query)
+                history = self.in_conversation_history.get_history()
+                final_message = self.llm.invoke(history)
+                self.in_conversation_history.add_message(final_message)
+
+                # Save memory
                 if self.memory and is_save_memory:
                     self.save_memory(message=final_message, user_id=self._user_id)
-                
+
                 return final_message
 
         except (json.JSONDecodeError, KeyError, ValueError) as e:
@@ -497,17 +521,20 @@ class Agent(AgentMeta):
                 yield result
             else:
                 # Initialize conversation with original query
-                conversation_history = []
                 current_query = query
                 iteration = 0
                 final_result = None
-                
+
                 while iteration < max_iterations:
                     iteration += 1
-                    logger.info(f"Streaming tool calling iteration {iteration}/{max_iterations}")
-                    
+                    logger.info(
+                        f"Streaming tool calling iteration {iteration}/{max_iterations}"
+                    )
+
                     # Create messages for current iteration
-                    prompt = self.prompt_template(query=current_query, user_id=self._user_id)
+                    prompt = self.prompt_template(
+                        query=current_query, user_id=self._user_id
+                    )
                     skills = "- " + "- ".join(self.skills)
                     messages = [
                         SystemMessage(
@@ -515,24 +542,32 @@ class Agent(AgentMeta):
                         ),
                         HumanMessage(content=prompt),
                     ]
-                    
+
                     # Add conversation history to messages
-                    messages.extend(conversation_history)
-                    
+                    self.in_conversation_history.add_messages(messages)
+
                     # Accumulate streamed content
                     full_content = AIMessageChunk(content="")
-                    for chunk in self.llm.stream(messages):
+                    history = self.in_conversation_history.get_history()
+                    for chunk in self.llm.stream(history):
                         full_content += chunk
                         yield chunk
 
+                    self.in_conversation_history.add_message(
+                        AIMessage(content=full_content.content)
+                    )
                     # After streaming is complete, process tool data
                     tool_data = self.tools_manager.extract_tool(full_content.content)
                     if (tool_data is None) or (tool_data == "{}"):
-                        logger.info(f"No more tool calls needed. Completed in {iteration} iterations.")
+                        logger.info(
+                            f"No more tool calls needed. Completed in {iteration} iterations."
+                        )
                         final_result = full_content
                         if self.memory and is_save_memory:
-                            self.save_memory(message=full_content, user_id=self._user_id)
-                        break  # Exit the loop if no tool is called
+                            self.save_memory(
+                                message=full_content, user_id=self._user_id
+                            )
+                        return final_result
 
                     # Parse and execute tool
                     tool_call = json.loads(tool_data)
@@ -549,23 +584,32 @@ class Agent(AgentMeta):
                     )
 
                     # Add AI message and tool result to conversation history
-                    conversation_history.append(AIMessage(content=full_content.content))
-                    conversation_history.append(tool_message)
-                    
+                    self.in_conversation_history.add_message(tool_message)
+
                     # Prepare next iteration with tool result context
-                    tool_template = self.prompt_tool(current_query, tool_call, tool_message)
+                    tool_template = self.prompt_tool(
+                        current_query, tool_call, tool_message
+                    )
                     current_query = tool_template
-                
+
                 # If we reach max iterations without natural completion
                 if iteration >= max_iterations and final_result is None:
-                    logger.warning(f"Reached maximum iterations ({max_iterations}). Stopping streaming tool calling loop.")
-                    final_message_content = f"Based on the previous tool executions, please provide a final response to: {query}"
-                    for chunk in self.llm.stream(final_message_content):
+                    logger.warning(
+                        f"Reached maximum iterations ({max_iterations}). Stopping streaming tool calling loop."
+                    )
+                    final_message_content = HumanMessage(
+                        f"Based on the previous tool executions, please provide a final response to: {query}"
+                    )
+                    self.in_conversation_history.add_message(final_message_content)
+                    history = self.in_conversation_history.get_history()
+                    full_content = AIMessageChunk(content="")
+                    for chunk in self.llm.stream(history):
+                        full_content += chunk
                         yield chunk
                     if self.memory and is_save_memory:
                         # Create a message from the streamed content for memory
-                        final_message = AIMessage(content="Tool execution completed after reaching max iterations")
-                        self.save_memory(message=final_message, user_id=self._user_id)
+                        self.save_memory(message=full_content, user_id=self._user_id)
+                        self.in_conversation_history.add_message(full_content)
 
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logger.error(f"Tool calling failed: {str(e)}")
@@ -625,16 +669,19 @@ class Agent(AgentMeta):
                 return result
             else:
                 # Initialize conversation with original query
-                conversation_history = []
                 current_query = query
                 iteration = 0
-                
+
                 while iteration < max_iterations:
                     iteration += 1
-                    logger.info(f"Async tool calling iteration {iteration}/{max_iterations}")
-                    
+                    logger.info(
+                        f"Async tool calling iteration {iteration}/{max_iterations}"
+                    )
+
                     # Create messages for current iteration
-                    prompt = self.prompt_template(query=current_query, user_id=self._user_id)
+                    prompt = self.prompt_template(
+                        query=current_query, user_id=self._user_id
+                    )
                     skills = "- " + "- ".join(self.skills)
                     messages = [
                         SystemMessage(
@@ -642,19 +689,23 @@ class Agent(AgentMeta):
                         ),
                         HumanMessage(content=prompt),
                     ]
-                    
+
                     # Add conversation history to messages
-                    messages.extend(conversation_history)
-                    
+                    self.in_conversation_history.add_messages(messages)
+                    history = self.in_conversation_history.get_history()
+
                     # Get LLM response
-                    response = await self.llm.ainvoke(messages)
-                    
+                    response = await self.llm.ainvoke(history)
+                    self.in_conversation_history.add_message(response)
+
                     # Extract tool call from response
                     tool_data = self.tools_manager.extract_tool(response.content)
-                    
+
                     # If no tool call is found, return the final response
                     if not tool_data or ("None" in tool_data) or (tool_data == "{}"):
-                        logger.info(f"No more tool calls needed. Completed in {iteration} iterations.")
+                        logger.info(
+                            f"No more tool calls needed. Completed in {iteration} iterations."
+                        )
                         if self.memory and is_save_memory:
                             self.save_memory(message=response, user_id=self._user_id)
                         return response
@@ -662,7 +713,7 @@ class Agent(AgentMeta):
                     # Parse and execute tool call
                     tool_call = json.loads(tool_data)
                     logger.info(f"Executing async tool call: {tool_call}")
-                    
+
                     tool_message = await self.tools_manager._execute_tool(
                         tool_name=tool_call["tool_name"],
                         tool_type=tool_call["tool_type"],
@@ -671,24 +722,32 @@ class Agent(AgentMeta):
                         mcp_client=self.mcp_client,
                         mcp_server_name=self.mcp_server_name,
                     )
-                    
+
                     # Add AI message and tool result to conversation history
-                    conversation_history.append(AIMessage(content=response.content))
-                    conversation_history.append(tool_message)
-                    
+                    self.in_conversation_history.add_message(tool_message)
+
                     # Prepare next iteration with tool result context
-                    tool_template = self.prompt_tool(current_query, tool_call, tool_message)
+                    tool_template = self.prompt_tool(
+                        current_query, tool_call, tool_message
+                    )
                     current_query = tool_template
-                
+
                 # If we reach max iterations, return the last tool message with a warning
-                logger.warning(f"Reached maximum iterations ({max_iterations}). Stopping async tool calling loop.")
-                final_message = await self.llm.ainvoke(f"Based on the previous tool executions, please provide a final response to: {query}")
-                
+                logger.warning(
+                    f"Reached maximum iterations ({max_iterations}). Stopping async tool calling loop."
+                )
+                user_query = HumanMessage(
+                    content=f"Based on the previous tool executions, please provide a final response to: {query}"
+                )
+                self.in_conversation_history.add_message(user_query)
+                history = self.in_conversation_history.get_history()
+                final_message = await self.llm.ainvoke(history)
+                self.in_conversation_history.add_message(final_message)
                 if self.memory and is_save_memory:
                     self.save_memory(message=final_message, user_id=self._user_id)
-                
+
                 return final_message
-                
+
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logger.error(f"Tool calling failed: {str(e)}")
             return None

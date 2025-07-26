@@ -312,6 +312,7 @@ class ToolManager:
 
         # Fallback to local introspection if required keys are missing or list is empty
         REQUIRED_KEYS = {"tool_name", "arguments", "return", "docstring"}
+
         def _introspect_module(module_obj, module_path_str):
             result = []
             for name, obj in inspect.getmembers(module_obj, inspect.isfunction):
@@ -320,7 +321,9 @@ class ToolManager:
                 sig = inspect.signature(obj)
                 arguments = {
                     param_name: (
-                        str(param.annotation) if param.annotation != inspect.Parameter.empty else "Any"
+                        str(param.annotation)
+                        if param.annotation != inspect.Parameter.empty
+                        else "Any"
                     )
                     for param_name, param in sig.parameters.items()
                 }
@@ -340,9 +343,11 @@ class ToolManager:
                 result.append(metadata)
             return result
 
-        if len(new_tools) == 0 or any(not REQUIRED_KEYS.issubset(item.keys()) for item in new_tools):
+        if len(new_tools) == 0 or any(
+            not REQUIRED_KEYS.issubset(item.keys()) for item in new_tools
+        ):
             logger.warning(
-                "LLM did not return valid tool metadata, falling back to introspection." 
+                "LLM did not return valid tool metadata, falling back to introspection."
             )
             new_tools = _introspect_module(module, module_path)
 
