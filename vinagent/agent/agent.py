@@ -318,7 +318,7 @@ class Agent(AgentMeta):
         user_id: str = "unknown_user",
         token: str = None,
         secret_key: str = None,
-        max_iterations: int = 20,  # Add max iterations to prevent infinite loops
+        max_iterations: int = 10,  # Add max iterations to prevent infinite loops
         **kwargs,
     ) -> Any:
         """
