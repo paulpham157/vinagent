@@ -48,8 +48,11 @@ nav:
     - Financial Usercase:
       - Visualize and Analyze Stock: guides/analyze_stock_trending.md
       - Find Trending New: guides/trending_news.md
+    - Research Usercase:
+      - Research Agent: guides/paper_research.md
     - RAG:
       - Agent RAG: get_started/agent_rag.md
+    
   - Reference: 
     - Agent: reference/agent.md
     - Tool: reference/tool.md
@@ -57,6 +60,7 @@ nav:
     - Graph: reference/graph.md
     - MCP: reference/mcp.md
     - Tracing: reference/tracing.md
+    - Authenticate: reference/authenticate.md
   - Contributing:
     - How to Contribute: contributing/contributing.md
 plugins:
