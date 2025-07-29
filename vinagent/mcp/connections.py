@@ -3,6 +3,7 @@ from typing import Any, Literal, TypedDict
 from datetime import timedelta
 from .error_handler import EncodingErrorHandler
 
+
 class StdioConnection(TypedDict):
     transport: Literal["stdio"]
 
@@ -85,4 +86,6 @@ class WebsocketConnection(TypedDict):
     """Additional keyword arguments to pass to the ClientSession"""
 
 
-Connection = StdioConnection | SSEConnection | StreamableHttpConnection | WebsocketConnection
+Connection = (
+    StdioConnection | SSEConnection | StreamableHttpConnection | WebsocketConnection
+)

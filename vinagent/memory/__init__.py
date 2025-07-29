@@ -1,3 +1,3 @@
 from .memory import Memory
 
-__all__ = ['Memory']
+__all__ = ["Memory"]

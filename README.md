@@ -1,6 +1,13 @@
+<p align="center">
+  <img src="asset/vinagent.png" alt="Vinagent Logo" width="300px" />
+</p>
 
-![PyPI](https://img.shields.io/pypi/v/vinagent)
-![Downloads](https://img.shields.io/pypi/dm/vinagent)
+[![Version](https://img.shields.io/pypi/v/vinagent.svg)](https://pypi.org/project/vinagent/)
+[![PyPI Downloads](https://static.pepy.tech/badge/vinagent/week)](https://pepy.tech/projects/vinagent)
+[![Downloads](https://static.pepy.tech/badge/vinagent/month)](https://pepy.tech/project/vinagent)
+[![PyPI Downloads](https://static.pepy.tech/badge/vinagent)](https://pepy.tech/projects/vinagent)
+[![Reddit r/vinagent](https://img.shields.io/badge/Reddit-r%2Fvinagent-orange?logo=reddit&logoColor=white)](https://www.reddit.com/r/vinagent/)
+[![Discord](https://img.shields.io/badge/Chat-Discord-5865F2?logo=discord&logoColor=white)](https://discord.com/channels/1036147288994758717/1358017320970358864)
 ![License](https://img.shields.io/github/license/datascienceworld-kan/vinagent)
 
 # 1. Introduction
@@ -9,7 +16,7 @@
 
 With its modular tool system, you can easily extend your agent's capabilities by integrating a wide range of tools. Each tool is self-contained, well-documented, and can be registered dynamically—making it effortless to scale and adapt your agent to new tasks or environments.
 
-![](https://imgur.com/s8SlWbR.png)
+![](asset/agent_system_design_v2.png)
 
 To install and use this library please following:
 
@@ -376,7 +383,7 @@ Since 2024, I have participated in Google GDSC and Google I/O as a guest speaker
 """
 
 memory.save_short_term_memory(llm, text_input)
-memory_message = memory.load_memory('string')
+memory_message = memory.load_memory_by_user('string')
 memory_message
 ```
 

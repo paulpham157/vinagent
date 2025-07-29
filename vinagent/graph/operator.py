@@ -5,9 +5,12 @@ from langgraph.utils.runnable import coerce_to_runnable
 from vinagent.graph.state_graph import StateGraph
 from vinagent.graph.node import Node
 
+
 # Modified StateGraph class
 class FlowStateGraph(StateGraph):
-    def __init__(self, state_schema=None, config_schema=None, *, input=None, output=None):
+    def __init__(
+        self, state_schema=None, config_schema=None, *, input=None, output=None
+    ):
         super().__init__(state_schema, config_schema, input=input, output=output)
         self.node_instances = {}
         self.flow_provided = False
@@ -22,10 +25,14 @@ class FlowStateGraph(StateGraph):
         # if name in (START.name, END.name):
         #     raise ValueError(f"Node '{name}' is reserved")
         self.node_instances[name] = node
-        if hasattr(node, 'config') and (node.config is not None):
-            runnable = coerce_to_runnable(lambda state, config: node.exec(state, config), name=name, trace=True)
+        if hasattr(node, "config") and (node.config is not None):
+            runnable = coerce_to_runnable(
+                lambda state, config: node.exec(state, config), name=name, trace=True
+            )
         else:
-            runnable = coerce_to_runnable(lambda state: node.exec(state), name=name, trace=True)
+            runnable = coerce_to_runnable(
+                lambda state: node.exec(state), name=name, trace=True
+            )
         super().add_node(name, runnable)
         return self
 
@@ -43,15 +50,26 @@ class FlowStateGraph(StateGraph):
                 self.add_node(first_node.name, first_node)
             self.add_edge(START.name, first_node.name)
         for route in flow:
-            if (route.name not in self.node_instances) and (route.name not in [START.name, END.name]):
+            if (route.name not in self.node_instances) and (
+                route.name not in [START.name, END.name]
+            ):
                 self.add_node(route.name, route)
             if isinstance(route.target, str):
                 self.add_edge(route.name, route.target)
             elif isinstance(route.target, dict):
-                path_map = {key: target.name if isinstance(target, Node) else target for key, target in route.target.items()}
-                self.add_conditional_edges(source=route.name, path=self.node_instances[route.name].branching, path_map=path_map)
+                path_map = {
+                    key: target.name if isinstance(target, Node) else target
+                    for key, target in route.target.items()
+                }
+                self.add_conditional_edges(
+                    source=route.name,
+                    path=self.node_instances[route.name].branching,
+                    path_map=path_map,
+                )
             elif isinstance(route.target, Node):
-                if route.target.name not in self.node_instances and (route.name != START.name and route.target.name != END.name):
+                if route.target.name not in self.node_instances and (
+                    route.name != START.name and route.target.name != END.name
+                ):
                     self.add_node(route.target.name, route.target)
                 self.add_edge(route.name, route.target.name)
             else:
