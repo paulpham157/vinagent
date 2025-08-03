@@ -309,9 +309,6 @@ class Agent(AgentMeta):
         self, query: str, tool_call: str, tool_message: ToolMessage, *args, **kwargs
     ) -> str:
         tool_template = (
-            "You are a an AI assistant. You get an result from a Tool.\n"
-            "- If the question and tool's result is easy. You can provide a simple answer.\n"
-            "- If the question and tool's result is complex. Your task is to deliver a clear and factual report that directly addresses the given question. Use the tool's name and result only to support your explanation. Do not fabricate any information or over-interpret the result.\n"
             f"- Question: {query}\n"
             f"- Tool Used: {tool_call}\n"
             f"- Tool's Result: {tool_message.artifact}\n"
