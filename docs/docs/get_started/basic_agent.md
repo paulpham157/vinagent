@@ -57,7 +57,13 @@ agent = Agent(
         "Searching information about stock price",
         "Visualization about stock price"]
 )
+```
+In there:
+- description: The general description of Agent you want to build. For instance, who you are and how do you work?
+- llm: The language model you want to use. You can use any models which are initialized by [OpenAI](https://github.com/openai/openai-python) class.
+- skills: A list of skills you want your agent to have. Each skill is a string. Each agent will has particular skills. For example, if you want your agent to be a Financial Analyst, you can set your skills as `["Deeply analyzing financial markets", "Searching information about stock price"]`.
 
+```
 # Step 2: invoke the agent
 message = agent.invoke("Who you are?")
 print(message)
