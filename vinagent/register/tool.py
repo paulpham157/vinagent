@@ -255,7 +255,9 @@ class ToolManager:
             "Analyze this module and return a list of tools in JSON format:\n"
             "- Module code:\n"
             f"{module_source}\n"
-            "- Format: Let's return a list of json format without further explaination and without ```json characters markdown and keep module_path unchange.\n"
+            "- Extract only tools marked with the @primary_function decorator. For example @primary_function def function_name(): ...\n"
+            "- Let's return a list of json format without further explaination and without ```json characters markdown and keep module_path unchange.\n"
+            "- Return value must be able to convert into a list from string.\n"
             "[{{\n"
             '"tool_name": "The function",\n'
             '"arguments": "A dictionary of keyword-arguments to execute tool. Let\'s keep default value if it was set",\n'

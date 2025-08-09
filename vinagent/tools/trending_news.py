@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 from langchain_together import ChatTogether
 from googlenewsdecoder import gnewsdecoder
-
+from vinagent.register import primary_function
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -187,7 +187,7 @@ class TrendingTopics:
             logger.error("Error in get_summary for ID %d: %s", news_id, str(e))
             return {"success": False, "error": f"Server error: {str(e)}"}
 
-
+@primary_function
 def trending_news_google_tools(
     top_k: int = 5,
     topic: str = "AI",
