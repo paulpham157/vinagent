@@ -635,7 +635,7 @@ def query_similar_legal_cases(query: str, n_legal_cases: int=2, threshold: float
 
 ## Initialize Legal Agent
 
-We demonstrate how to initialize a legal assistant on VinAgent, which can assist users with tasks such as:
+We demonstrate how to initialize a legal assistant on vinagent, which can assist users with tasks such as:
 
 - Searching for relevant legal cases.
 
