@@ -308,10 +308,8 @@ class Agent(AgentMeta):
     def prompt_tool(
         self, query: str, tool_call: str, tool_message: ToolMessage, *args, **kwargs
     ) -> str:
+        print("tool_message: ", tool_message)
         tool_template = (
-            "You are a an AI assistant. You get an result from a Tool.\n"
-            "- If the question and tool's result is easy. You can provide a simple answer.\n"
-            "- If the question and tool's result is complex. Your task is to deliver a clear and factual report that directly addresses the given question. Use the tool's name and result only to support your explanation. Do not fabricate any information or over-interpret the result.\n"
             f"- Question: {query}\n"
             f"- Tool Used: {tool_call}\n"
             f"- Tool's Result: {tool_message.artifact}\n"
@@ -327,6 +325,8 @@ class Agent(AgentMeta):
         token: str = None,
         secret_key: str = None,
         max_iterations: int = 10,  # Add max iterations to prevent infinite loops
+        is_tool_formatted: bool = True,
+        max_history: int=None,
         **kwargs,
     ) -> Any:
         """
@@ -339,6 +339,8 @@ class Agent(AgentMeta):
             token (str, optional): Authentication token for the user. Defaults to None.
             secret_key (str, optional): Secret key for authentication. Defaults to None.
             max_iterations (int, optional): Maximum number of tool call iterations to prevent infinite loops. Defaults to 10.
+            is_tool_formatted (bool, optional): Modifying the output Tool to become more human-preferred. If True, it needs one next llm invoke to format answer, else directly return tool_message. Defaults to True.
+            max_history (int, optional): The maximum number of messages. Defaults to None.
             **kwargs: Additional keyword arguments, including an optional `config` dictionary for graph execution.
 
         Returns:
@@ -401,7 +403,7 @@ class Agent(AgentMeta):
                     self.in_conversation_history.add_messages(messages)
 
                     # Get LLM response
-                    history = self.in_conversation_history.get_history()
+                    history = self.in_conversation_history.get_history(max_history=max_history)
                     response = self.llm.invoke(history)
                     self.in_conversation_history.add_message(response)
 
@@ -445,19 +447,23 @@ class Agent(AgentMeta):
                     f"Reached maximum iterations ({max_iterations}). Stopping tool calling loop."
                 )
 
-                user_query = HumanMessage(
-                    content=f"Based on the previous tool executions, please provide a final response to: {query}"
-                )
-                self.in_conversation_history.add_message(user_query)
-                history = self.in_conversation_history.get_history()
-                final_message = self.llm.invoke(history)
-                self.in_conversation_history.add_message(final_message)
-
+                if is_tool_formatted:
+                    user_query = HumanMessage(
+                        content=f"Based on the previous tool executions, please provide a final response to: {query}"
+                    )
+                    self.in_conversation_history.add_message(user_query)
+                    history = self.in_conversation_history.get_history(max_history=max_history)
+                    final_message = self.llm.invoke(history)
+                    self.in_conversation_history.add_message(final_message)
+                else:
+                    final_message = tool_message
+                
                 # Save memory
                 if self.memory and is_save_memory:
                     self.save_memory(message=final_message, user_id=self._user_id)
 
                 return final_message
+
 
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logger.error(f"Tool calling failed: {str(e)}")
@@ -471,6 +477,8 @@ class Agent(AgentMeta):
         token: str = None,
         secret_key: str = None,
         max_iterations: int = 10,  # Add max iterations to prevent infinite loops
+        is_tool_formatted: bool = True,
+        max_history: int = None,
         **kwargs,
     ) -> AsyncGenerator[Any, None]:
         """
@@ -483,6 +491,8 @@ class Agent(AgentMeta):
             token (str, optional): Authentication token for the user. Defaults to None.
             secret_key (str, optional): Secret key for authentication. Defaults to None.
             max_iterations (int, optional): Maximum number of tool call iterations to prevent infinite loops. Defaults to 10.
+            is_tool_formatted (bool, optional): Modifying the output Tool to become more human-preferred. If True, it needs one next llm invoke to format answer, else directly return tool_message. Defaults to True.
+            max_history (int, optional): Number of last messages in the history. Defaults to None.
             **kwargs: Additional keyword arguments, including an optional `config` dictionary for graph execution.
 
         Returns:
@@ -548,7 +558,7 @@ class Agent(AgentMeta):
 
                     # Accumulate streamed content
                     full_content = AIMessageChunk(content="")
-                    history = self.in_conversation_history.get_history()
+                    history = self.in_conversation_history.get_history(max_history=max_history)
                     for chunk in self.llm.stream(history):
                         full_content += chunk
                         yield chunk
@@ -597,19 +607,22 @@ class Agent(AgentMeta):
                     logger.warning(
                         f"Reached maximum iterations ({max_iterations}). Stopping streaming tool calling loop."
                     )
-                    final_message_content = HumanMessage(
-                        f"Based on the previous tool executions, please provide a final response to: {query}"
-                    )
-                    self.in_conversation_history.add_message(final_message_content)
-                    history = self.in_conversation_history.get_history()
-                    full_content = AIMessageChunk(content="")
-                    for chunk in self.llm.stream(history):
-                        full_content += chunk
-                        yield chunk
+                    if is_tool_formatted:
+                        final_message_content = HumanMessage(
+                            f"Based on the previous tool executions, please provide a final response to: {query}"
+                        )
+                        self.in_conversation_history.add_message(final_message_content)
+                        history = self.in_conversation_history.get_history(max_history=max_history)
+                        full_content = AIMessageChunk(content="")
+                        for chunk in self.llm.stream(history):
+                            full_content += chunk
+                            yield chunk
+                        self.in_conversation_history.add_message(full_content)
+                    else:
+                        full_content = tool_message
                     if self.memory and is_save_memory:
                         # Create a message from the streamed content for memory
                         self.save_memory(message=full_content, user_id=self._user_id)
-                        self.in_conversation_history.add_message(full_content)
 
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logger.error(f"Tool calling failed: {str(e)}")
@@ -623,10 +636,13 @@ class Agent(AgentMeta):
         token: str = None,
         secret_key: str = None,
         max_iterations: int = 10,  # Add max iterations to prevent infinite loops
+        is_tool_formatted: bool = True,
+        max_history: int = None,
         **kwargs,
     ) -> Any:
         """
         Answer the user query asynchronously with continuous tool calling capability.
+        
         Args:
             query (str): The input query or task description provided by the user.
             is_save_memory (bool, optional): Flag to determine if the conversation should be saved to memory. Defaults to False.
@@ -634,6 +650,8 @@ class Agent(AgentMeta):
             token (str, optional): Authentication token for the user. Defaults to None.
             secret_key (str, optional): Secret key for authentication. Defaults to None.
             max_iterations (int, optional): Maximum number of tool call iterations to prevent infinite loops. Defaults to 10.
+            is_tool_formatted (bool, optional): Modifying the output Tool to become more human-preferred. If True, it needs one next llm invoke to format answer, else directly return tool_message. Defaults to True.
+            max_history (int, None): Number of maximum history messages. Defaults to None.
             **kwargs: Additional keyword arguments, including an optional `config` dictionary for graph execution.
 
         Returns:
@@ -692,7 +710,7 @@ class Agent(AgentMeta):
 
                     # Add conversation history to messages
                     self.in_conversation_history.add_messages(messages)
-                    history = self.in_conversation_history.get_history()
+                    history = self.in_conversation_history.get_history(max_history=max_history)
 
                     # Get LLM response
                     response = await self.llm.ainvoke(history)
@@ -740,9 +758,12 @@ class Agent(AgentMeta):
                     content=f"Based on the previous tool executions, please provide a final response to: {query}"
                 )
                 self.in_conversation_history.add_message(user_query)
-                history = self.in_conversation_history.get_history()
-                final_message = await self.llm.ainvoke(history)
-                self.in_conversation_history.add_message(final_message)
+                history = self.in_conversation_history.get_history(max_history=max_history)
+                if is_tool_formatted:
+                    final_message = self.llm.invoke(history)
+                    self.in_conversation_history.add_message(final_message)
+                else:
+                    final_message = tool_message
                 if self.memory and is_save_memory:
                     self.save_memory(message=final_message, user_id=self._user_id)
 

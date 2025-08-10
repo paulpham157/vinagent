@@ -241,7 +241,10 @@ class ToolManager:
                 destination_path = Path(
                     os.path.join(absolute_lib_path.parent, "tools", module_path.name)
                 )
-                shutil.copy2(module_path, destination_path)
+                if module_path.resolve(strict=False) == destination_path.resolve(strict=False):
+                    pass
+                else:
+                    shutil.copy2(module_path, destination_path)
                 module_path = f"vinagent.tools.{destination_path.name.split('.')[0]}"
             module = importlib.import_module(module_path, package=__package__)
             module_source = inspect.getsource(module)
@@ -252,7 +255,9 @@ class ToolManager:
             "Analyze this module and return a list of tools in JSON format:\n"
             "- Module code:\n"
             f"{module_source}\n"
-            "- Format: Let's return a list of json format without further explaination and without ```json characters markdown and keep module_path unchange.\n"
+            "- Extract only tools marked with the @primary_function decorator. For example @primary_function def function_name(): ...\n"
+            "- Let's return a list of json format without further explaination and without ```json characters markdown and keep module_path unchange.\n"
+            "- Return value must be able to convert into a list from string.\n"
             "[{{\n"
             '"tool_name": "The function",\n'
             '"arguments": "A dictionary of keyword-arguments to execute tool. Let\'s keep default value if it was set",\n'
@@ -285,6 +290,7 @@ class ToolManager:
         except (ValueError, SyntaxError):
             # Fallback: extract the first JSON object/list from text
             extracted = self.extract_tool(response_text)
+            print(f'extracted: {extracted}')
             if extracted:
                 try:
                     new_tools = ast.literal_eval(extracted)

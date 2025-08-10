@@ -55,7 +55,7 @@ With its modular tool system, you can easily extend your agent's capabilities by
       <td align="center">Workflow</td>
       <td align="center">✅</td>
       <td align="center">✅</td>
-      <td align="center">❌</td>
+      <td align="center">✅</td>
       <td align="center">✅</td>
       <td align="center">❌</td>
     </tr>

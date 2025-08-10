@@ -8,6 +8,7 @@ from langchain_core.messages import AnyMessage, SystemMessage, HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_together import ChatTogether
 from tavily import TavilyClient
+from vinagent.register import primary_function
 
 load_dotenv()
 
@@ -245,7 +246,7 @@ class DeepSearch:
         content = f"# I. Planning\n{plans}\n\n# II. Results\n{chapters}"
         return content
 
-
+@primary_function
 def deepsearch_tool(
     query: str,
     max_chapters: int = 4,

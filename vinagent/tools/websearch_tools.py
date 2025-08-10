@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from tavily import TavilyClient
 from dataclasses import dataclass
 from typing import Union, Any
+from vinagent.register import primary_function
 
 _ = load_dotenv()
 
@@ -19,7 +20,7 @@ class WebSearchClient:
         result = self.tavily_client.search(query_string, include_answer=True)
         return result["answer"]
 
-
+@primary_function
 def search_api(query: Union[str, dict[str, str]]) -> Any:
     """
     Search for an answer from a query string
