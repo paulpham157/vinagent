@@ -99,7 +99,7 @@ print(message.content)
     Hello my friend, I'm vinagent, an AI smart assistant. I come here to help you 😄!
 
 
-# How to register tools
+## Function Tool
 
 Vinagent stands out for its flexibility in registering different types of tools, including:
 
@@ -109,11 +109,7 @@ Vinagent stands out for its flexibility in registering different types of tools,
 
 - MCP tools: These are tools registered through an [MCP (Model Context Protocol) server](https://github.com/modelcontextprotocol/servers), enabling external tool integration.
 
-In the following sections, let's explore how to register each type of tools in `vinagent` library.
-
-## Function Tool
-
-You can customize any function in your runtime code as a powerful tool by using the `@function_tool` decorator.
+In the following sections, let's explore how to register each type of tools in `vinagent` library. First, let's see how to register a function tool. You can customize any function in your runtime code as a powerful tool by using the `@function_tool` decorator.
 
 ```python
 from vinagent.register.tool import function_tool
