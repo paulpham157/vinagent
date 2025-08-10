@@ -642,6 +642,7 @@ class Agent(AgentMeta):
     ) -> Any:
         """
         Answer the user query asynchronously with continuous tool calling capability.
+        
         Args:
             query (str): The input query or task description provided by the user.
             is_save_memory (bool, optional): Flag to determine if the conversation should be saved to memory. Defaults to False.
