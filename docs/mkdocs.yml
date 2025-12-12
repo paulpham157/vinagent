@@ -47,6 +47,9 @@ nav:
     - Agent Development:
       - Workflow & Agent: get_started/workflow_and_agent.md
       - Agent RAG: get_started/agent_rag.md
+    - Multi-Agent Development: 
+      - Start with basic Multi-Agent: get_started/multi_agent.md
+
   - Guidelines: 
     - Financial Usercase:
       - Visualize and Analyze Stock: guides/analyze_stock_trending.md
@@ -57,8 +60,10 @@ nav:
       - Research Agent: guides/paper_research.md
     - Legal Field:
       - Legal Agent: guides/legal_assistant.md
+    - Ecommerce Usercase:
+      - Customer Care Multi-Agent: guides/customer_care.md
     - RAG:
-      - Agent RAG: get_started/agent_rag.md
+      - Agent RAG: guides/agent_rag.md
     
   - Reference: 
     - Agent: reference/agent.md
