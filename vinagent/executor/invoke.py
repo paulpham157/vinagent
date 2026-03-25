@@ -15,7 +15,7 @@ from vinagent.register.tool import ToolCall
 from vinagent.executor.guardrail import GuardrailExecutor
 from vinagent.register.tool import ToolManager
 from vinagent.message.adapter import adapter_ai_response_with_tool_calls
-from vinagent.prompt.agent_prompt import PromptHandler
+from vinagent.prompt.agent_prompt import PromptHandler, PromptToolResult
 from vinagent.memory.history import InConversationHistory
 from vinagent.memory.memory import Memory
 from vinagent.mcp.client import DistributedMCPClient
@@ -27,11 +27,13 @@ class InvokeExecutor(InvokeExecutorBase, MessageHandler, PromptHandler):
         self,
         llm: Union[ChatTogether, BaseLanguageModel, BaseChatOpenAI],
         guardrail_executor: GuardrailExecutor = None,
+        seconds_limit: int = 30,
         *args,
         **kwargs,
     ):
         self.llm = llm
         self.guardrail_executor = guardrail_executor
+        self.seconds_limit = seconds_limit
 
     def define_tools(
         self,
@@ -59,7 +61,6 @@ class InvokeExecutor(InvokeExecutorBase, MessageHandler, PromptHandler):
 
     def _step1_llm_define_tool(
         self,
-        iteration: int = 1,
         max_history: int = 5,
         user_id: str = "unknown_user",
         message: str = "",
@@ -69,6 +70,7 @@ class InvokeExecutor(InvokeExecutorBase, MessageHandler, PromptHandler):
         description: str = "",
         instruction: str = "",
         history: InConversationHistory = None,
+        iteration: int = 1,
     ) -> AgentResponse:
         """
         Step 1: Build prompt and invoke LLM to get AgentResponse.
@@ -97,6 +99,8 @@ class InvokeExecutor(InvokeExecutorBase, MessageHandler, PromptHandler):
         history: InConversationHistory,
         mcp_client: DistributedMCPClient,
         mcp_server_name: str,
+        previous_prompt_tool: PromptToolResult = None,
+        iteration: int = 1,
     ) -> tuple[str, ToolMessage | None, bool]:
         """
         Step 2: Execute tool call (or fix_bug_command) based on AgentResponse.
@@ -112,13 +116,13 @@ class InvokeExecutor(InvokeExecutorBase, MessageHandler, PromptHandler):
             next_query, fix_msg, should_continue = self._handle_fix_bug_command(
                 fix_cmd=fix_cmd, query=current_query, response=response, history=history
             )
-            return next_query, fix_msg, should_continue
+            return next_query, fix_msg, should_continue, previous_prompt_tool
 
         # --- 2b. No tool call — agent has a direct answer ---
         if not getattr(response, "requires_tool", False) or not getattr(
             response, "tool_call", None
         ):
-            return current_query, None, False
+            return current_query, None, False, previous_prompt_tool
 
         # --- 2c. Validate tool data ---
         tool_data = response.tool_call.model_dump()
@@ -126,12 +130,15 @@ class InvokeExecutor(InvokeExecutorBase, MessageHandler, PromptHandler):
             logger.warning(
                 "LLM generated empty or invalid tool_call. Prompting for correction."
             )
-            history.add_message(AIMessage(content=str(response)))
+            history.add_message(
+                AIMessage(content=str(response), iteration_id=iteration)
+            )
             return (
                 "Your response was invalid. You must provide either a valid `tool_call`, "
                 "a valid `answer`, or a `fix_bug_command`.",
                 None,
                 True,
+                previous_prompt_tool,
             )
 
         # --- 2d. Check tool guardrail permission ---
@@ -157,30 +164,41 @@ class InvokeExecutor(InvokeExecutorBase, MessageHandler, PromptHandler):
         )
         if _registry_id:
             tool_data["tool_call_id"] = _registry_id
-        invocation_id = tool_data.get("tool_call_id") or "tool_" + str(uuid.uuid4())
+        invocation_id = "tool_" + str(uuid.uuid4())
         content_val = response.answer if getattr(response, "answer", None) else ""
         try:
             ai_message = adapter_ai_response_with_tool_calls(
                 tools_manager.load_tools(),
-                AIMessage(content=content_val),
+                AIMessage(content=content_val, iteration_id=iteration),
                 tool_data,
                 tool_call_id=invocation_id,
             )
-            history.add_message(ai_message)
+            history.add_message(ai_message, iteration_id=iteration)
 
         except ValueError as e:
             logger.warning(str(e))
             # The agent hallucinated a tool. Don't crash, feed the error back.
-            history.add_message(AIMessage(content=content_val))
+            fake_tool_call = {
+                "name": tool_data.get("tool_name", "unknown_tool"),
+                "args": tool_data.get("arguments", {}),
+                "id": invocation_id,
+                "type": tool_data.get("tool_type", "function"),
+            }
+            ai_msg_failed = AIMessage(content=content_val, iteration_id=iteration)
+            ai_msg_failed.tool_calls = [fake_tool_call]
+            history.add_message(
+                ai_msg_failed,
+                iteration_id=iteration,
+            )
             error_msg = ToolMessage(
                 content=str(e),
                 tool_call_id=invocation_id,
                 additional_kwargs={"is_error": True},
+                iteration_id=iteration,
             )
-            history.add_message(error_msg)
-            _history = history.get_history()
-            next_query = self.prompt_tool(current_query, tool_data, error_msg, _history)
-            return next_query, error_msg, True
+            history.add_message(error_msg, iteration_id=iteration)
+            # On tool failure: keep the original query unchanged so the LLM retries
+            return current_query, error_msg, True, previous_prompt_tool
 
         # --- 2f. Execute tool ---
         if is_valid_tool_permission:
@@ -192,6 +210,7 @@ class InvokeExecutor(InvokeExecutorBase, MessageHandler, PromptHandler):
                     module_path=tool_data["module_path"],
                     mcp_client=mcp_client,
                     mcp_server_name=mcp_server_name,
+                    seconds_limit=self.seconds_limit,
                 )
             )
             if tool_message is None:
@@ -199,24 +218,23 @@ class InvokeExecutor(InvokeExecutorBase, MessageHandler, PromptHandler):
                     content="Tool execution success without artifact",
                     additional_kwargs={"is_error": False},
                     tool_call_id=invocation_id,
+                    iteration_id=iteration,
                 )
             else:
                 # Override the static registry ID with the per-invocation ID
                 # so it always matches ai_message.tool_calls[0]['id'].
                 tool_message.tool_call_id = invocation_id
+                tool_message.iteration_id = iteration
         else:
             tool_message = ToolMessage(
                 content="Tool is not permitted by security rules.",
                 additional_kwargs={"is_error": True},
                 tool_call_id=invocation_id,
+                iteration_id=iteration,
             )
+        history.add_message(tool_message, iteration_id=iteration)
 
-        history.add_message(tool_message)
-        _history = history.get_history()
-
-        # --- 2g. Build next iteration context ---
-        next_query = self.prompt_tool(current_query, tool_data, tool_message, _history)
-        return next_query, tool_message, True
+        return current_query, tool_message, True, previous_prompt_tool
 
     def _step3_final_response(
         self,
@@ -228,6 +246,7 @@ class InvokeExecutor(InvokeExecutorBase, MessageHandler, PromptHandler):
         history: InConversationHistory = None,
         memory: Memory = None,
         user_id: str = None,
+        iteration: int = 1,
     ) -> AIMessage:
         """
         Step 3: Format and return the final response after the tool loop ends.
@@ -237,16 +256,18 @@ class InvokeExecutor(InvokeExecutorBase, MessageHandler, PromptHandler):
         if is_tool_formatted:
             history.add_message(
                 HumanMessage(
-                    content=f"Based on the previous tool executions, please provide a final response to: {query}"
+                    content=f"Based on the previous tool executions, please provide a final response to: {query}",
+                    iteration_id=iteration,
                 )
             )
             _history = history.get_history(max_history=max_history)
             final_message = self.llm.invoke(_history)
-            history.add_message(final_message)
+            history.add_message(final_message, iteration_id=iteration)
         else:
             final_message = tool_message
+            final_message.iteration_id = iteration
 
-        self.check_output_guardrail(final_message)
+        self.guardrail_executor.check_output_guardrail(final_message)
 
         if memory and is_save_memory:
             final_content = (
@@ -259,5 +280,5 @@ class InvokeExecutor(InvokeExecutorBase, MessageHandler, PromptHandler):
         return (
             final_message
             if hasattr(final_message, "content")
-            else AIMessage(content=final_message)
-        ), history
+            else AIMessage(content=final_message, iteration_id=iteration)
+        )

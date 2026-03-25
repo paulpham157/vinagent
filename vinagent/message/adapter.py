@@ -30,8 +30,8 @@ def adapter_ai_response_with_tool_calls(
     selected_tool = all_tools[tool_name]
     adapt_tool = {
         "name": selected_tool["tool_name"],
-        "args": tool_call["arguments"],
-        "type": "tool_call",
+        "args": tool_call.get("arguments", {}),
+        "type": selected_tool["tool_type"],
         # Prefer the caller-supplied ID (fresh per invocation) so the
         # AIMessage and ToolMessage always share the exact same ID.
         "id": tool_call_id or selected_tool.get("tool_call_id", "unknown"),

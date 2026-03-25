@@ -1,14 +1,15 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Union, List, Any
+from collections import defaultdict
 from pydantic import BaseModel, Field
-from langchain_core.messages import AIMessage, ToolMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 from vinagent.register.tool import ToolCall
 from vinagent.memory.history import InConversationHistory
 from vinagent.register.tool import ToolManager
 from vinagent.logger.logger import logger
 from vinagent.mcp.client import DistributedMCPClient
 from vinagent.memory.memory import Memory
-from vinagent.prompt.agent_prompt import PromptHandler
+from vinagent.prompt.agent_prompt import PromptHandler, PromptToolResult
 
 
 class AgentResponse(BaseModel):
@@ -56,51 +57,183 @@ class AgentResponse(BaseModel):
 
 
 class MessageHandler(PromptHandler):
+    def _get_iteration_id(
+        self, msg: Union[SystemMessage, HumanMessage, AIMessage, ToolMessage]
+    ) -> int:
+        """Extract iteration_id from a message, defaulting to 0."""
+        return getattr(msg, "iteration_id", None) or 0
+
+    def _rearrange_messages(
+        self, messages: List[Union[SystemMessage, HumanMessage, AIMessage, ToolMessage]]
+    ) -> List:
+        """
+        Rearrange messages with these rules:
+        - SystemMessage and HumanMessage stay in their original positions (not sorted).
+        - AIMessage and ToolMessage within the same iteration_id are sorted after
+        all SystemMessage/HumanMessage in that group.
+        - Each ToolMessage is relocated to sit immediately after its paired AIMessage.
+        - ToolMessages with no matching AIMessage are appended at the end of their group.
+        """
+        # Step 1: bucket by iteration_id, preserving insertion order
+        buckets: dict[int, list] = defaultdict(list)
+        order: list[int] = []
+        for msg in messages:
+            iid = self._get_iteration_id(msg)
+            if iid not in buckets:
+                order.append(iid)
+            buckets[iid].append(msg)
+
+        result = []
+
+        for iid in order:
+            bucket = buckets[iid]
+
+            # Step 2: build tool_call_id → ToolMessage lookup for this bucket
+            tool_msg_lookup: dict[str, ToolMessage] = {}
+            for msg in bucket:
+                if isinstance(msg, ToolMessage):
+                    tid = getattr(msg, "tool_call_id", None)
+                    if tid:
+                        tool_msg_lookup[tid] = msg
+
+            # Step 3: separate into anchor messages (keep original order)
+            # and floating messages (AIMessage/ToolMessage to be arranged)
+            anchor_msgs = [
+                m for m in bucket if isinstance(m, (SystemMessage, HumanMessage))
+            ]
+            ai_msgs = [m for m in bucket if isinstance(m, AIMessage)]
+            # ToolMessages will be injected after their AIMessage — collected separately
+            orphan_tool_msgs = [m for m in bucket if isinstance(m, ToolMessage)]
+
+            # Step 4: build arranged tail — AIMessage with ToolMessage injected right after
+            relocated_tool_ids: set[str] = set()
+            arranged_tail = []
+
+            for msg in ai_msgs:
+                arranged_tail.append(msg)
+
+                tool_calls = getattr(msg, "tool_calls", None) or []
+                for tc in tool_calls:
+                    tc_id = tc["id"] if isinstance(tc, dict) else tc.id
+                    if tc_id in tool_msg_lookup and tc_id not in relocated_tool_ids:
+                        arranged_tail.append(tool_msg_lookup[tc_id])
+                        relocated_tool_ids.add(tc_id)
+
+            # Step 5: append truly orphaned ToolMessages (no paired AIMessage found)
+            for msg in orphan_tool_msgs:
+                tid = getattr(msg, "tool_call_id", None)
+                if tid not in relocated_tool_ids:
+                    arranged_tail.append(msg)
+
+            # Step 6: anchors first (original order), then the arranged AI/Tool tail
+            result.extend(anchor_msgs)
+            result.extend(arranged_tail)
+
+        return result
+
     def _sanitize_history(
-        self,
-        messages: list,
-    ) -> list:
+        self, messages: List[Union[SystemMessage, HumanMessage, AIMessage, ToolMessage]]
+    ) -> List:
         """
-        Ensure the message list is valid for OpenAI's chat API.
-
-        Rules enforced:
-        1. Every ToolMessage must be immediately preceded by an AIMessage
-           that has a ``tool_calls`` list containing the matching id.
-        2. The list must NOT start with a ToolMessage.
-
-        Any ToolMessage that violates these rules — along with its preceding
-        AIMessage (if it exists but has no tool_calls) — is quietly dropped so
-        the request doesn't get a 400.
+        1. Clone the input — never mutate the original.
+        2. Rearrange: SystemMessage/HumanMessage keep original order; AIMessage/ToolMessage
+        are grouped with ToolMessages relocated immediately after their paired AIMessage.
+        3. Drop AIMessages whose tool_call_ids have no matching ToolMessage anywhere.
+        4. Drop duplicate AIMessages for the same tool_call_id (keep the last one).
+        5. Drop ToolMessages not immediately preceded by their paired AIMessage.
+        6. Repeat until stable.
         """
-        # Collect ids of tool_calls present in the history
-        valid_tool_call_ids: set = set()
-        for msg in messages:
-            if isinstance(msg, AIMessage) and getattr(msg, "tool_calls", None):
-                for tc in msg.tool_calls:
-                    tc_id = (
-                        tc.get("id")
-                        if isinstance(tc, dict)
-                        else getattr(tc, "id", None)
-                    )
-                    if tc_id:
-                        valid_tool_call_ids.add(tc_id)
+        # Step 1: shallow clone
+        messages = list(messages)
 
-        sanitized = []
-        for msg in messages:
-            if isinstance(msg, ToolMessage):
-                # Only keep ToolMessages whose tool_call_id has a matching AIMessage
-                tc_id = getattr(msg, "tool_call_id", None)
-                if tc_id and tc_id in valid_tool_call_ids:
-                    sanitized.append(msg)
-                # else: silently drop this orphaned ToolMessage
-            else:
-                sanitized.append(msg)
+        # Step 2: rearrange
+        messages = self._rearrange_messages(messages)
 
-        # Strip any leading ToolMessages (shouldn't remain after above, but be safe)
-        while sanitized and isinstance(sanitized[0], ToolMessage):
-            sanitized.pop(0)
+        # Step 3: iterative removal until stable
+        changed = True
+        while changed:
+            changed = False
+            result = []
 
-        return sanitized
+            # Collect every answered tool_call_id in the current list
+            answered_ids: set[str] = {
+                getattr(m, "tool_call_id", None)
+                for m in messages
+                if isinstance(m, ToolMessage)
+            } - {None}
+
+            # For each answered tool_call_id, record the index of the LAST AIMessage
+            last_ai_index_for_id: dict[str, int] = {}
+            for idx, msg in enumerate(messages):
+                if isinstance(msg, AIMessage):
+                    for tc in getattr(msg, "tool_calls", None) or []:
+                        tc_id = tc["id"] if isinstance(tc, dict) else tc.id
+                        if tc_id in answered_ids:
+                            last_ai_index_for_id[tc_id] = idx  # last index wins
+
+            i = 0
+            while i < len(messages):
+                msg = messages[i]
+
+                # --- AIMessage validation ---
+                if isinstance(msg, AIMessage):
+                    tool_calls = getattr(msg, "tool_calls", None)
+                    if tool_calls:
+                        expected_ids = {
+                            tc["id"] if isinstance(tc, dict) else tc.id
+                            for tc in tool_calls
+                        }
+
+                        # Drop if none of its ids are answered anywhere in the list
+                        if expected_ids.isdisjoint(answered_ids):
+                            print(
+                                f"[sanitize] DROP unanswered AIMessage "
+                                f"tool_call_ids={expected_ids}"
+                            )
+                            changed = True
+                            i += 1
+                            continue
+
+                        # Drop if a later AIMessage with the same tool_call_id exists
+                        is_stale = any(
+                            last_ai_index_for_id.get(tc_id, i) > i
+                            for tc_id in expected_ids
+                            if tc_id in answered_ids
+                        )
+                        if is_stale:
+                            print(
+                                f"[sanitize] DROP stale AIMessage at index {i} "
+                                f"tool_call_ids={expected_ids}"
+                            )
+                            changed = True
+                            i += 1
+                            continue
+
+                # --- ToolMessage validation ---
+                if isinstance(msg, ToolMessage):
+                    last_kept = result[-1] if result else None
+                    last_kept_ids: set[str] = set()
+                    if isinstance(last_kept, AIMessage):
+                        for tc in getattr(last_kept, "tool_calls", None) or []:
+                            last_kept_ids.add(
+                                tc["id"] if isinstance(tc, dict) else tc.id
+                            )
+
+                    tid = getattr(msg, "tool_call_id", None)
+                    if tid not in last_kept_ids:
+                        print(
+                            f"[sanitize] DROP orphaned ToolMessage tool_call_id={tid}"
+                        )
+                        changed = True
+                        i += 1
+                        continue
+
+                result.append(msg)
+                i += 1
+
+            messages = result
+
+        return messages
 
     def _run_fix_bug_command(self, fix_cmd: str, history: InConversationHistory):
         """Run a fix_bug_command script and persist env variable changes to os.environ."""
@@ -239,7 +372,7 @@ class MessageHandler(PromptHandler):
 
         # If that fails, fallback to extracting just the tool call
         tool_data = tools_manager.extract_tool(content)
-        logger.info(f"tool_data: {tool_data}")
+        # logger.info(f"tool_data: {tool_data}")
         if tool_data:
             if isinstance(tool_data, str):
                 try:
@@ -290,14 +423,23 @@ class MessageHandler(PromptHandler):
         On subsequent iterations, appends the updated query as a new HumanMessage.
         """
         tools = tools_manager.load_tools()
-        prompt = self.build_prompt(user_id, message, tools, memory)
-        _system_prompt = self.system_prompt(skills, description, instruction)
+        _hist_list = history.get_history() if history else None
+        prompt = self.build_prompt(user_id, message, tools, memory, history=_hist_list)
+        _system_prompt = self.system_prompt(
+            skills, description, instruction, iteration=iteration
+        )
 
         if iteration == 1:
-            messages = [_system_prompt, HumanMessage(content=prompt)]
-            history.add_messages(messages)
+            messages = [
+                _system_prompt,
+                HumanMessage(content=prompt, iteration_id=iteration),
+            ]
+            history.add_messages(messages, iteration_id=iteration)
         else:
-            history.add_message(HumanMessage(content=prompt))
+            history.add_message(
+                HumanMessage(content=prompt, iteration_id=iteration),
+                iteration_id=iteration,
+            )
 
         _history = history.get_history(max_history=max_history)
         return _history
@@ -310,19 +452,16 @@ class MessageHandler(PromptHandler):
         history: InConversationHistory,
     ):
         fix_msg = self._run_fix_bug_command(fix_cmd=fix_cmd, history=history)
-        if not getattr(response, "requires_tool", False) or not getattr(
-            response, "tool_call", None
-        ):
-            next_query = (
-                f"Original task: {query}\n\n"
-                f"I executed your fix_bug_command.\n"
-                f"Result: {fix_msg.content}\n"
-                f"Output: {fix_msg.artifact}\n\n"
-                f"Please now RETRY the PREVIOUS tool call that failed. You MUST set "
-                f"`requires_tool`: true and provide the exact `tool_call` so it can execute "
-                f"in the newly repaired environment. DO NOT provide an `answer` explanation."
-            )
-            return next_query, fix_msg, True
+        next_query = (
+            f"Original task: {query}\n\n"
+            f"I executed your fix_bug_command.\n"
+            f"Result: {fix_msg.content}\n"
+            f"Output: {fix_msg.artifact}\n\n"
+            f"Please now RETRY the PREVIOUS tool call that failed. You MUST set "
+            f"`requires_tool`: true and provide the exact `tool_call` so it can execute "
+            f"in the newly repaired environment. DO NOT provide an `answer` explanation."
+        )
+        return next_query, fix_msg, True
 
 
 class InvokeExecutorBase(ABC):
@@ -337,7 +476,6 @@ class InvokeExecutorBase(ABC):
     @abstractmethod
     def _step1_llm_define_tool(
         self,
-        iteration: int = 1,
         max_history: int = 5,
         user_id: str = "unknown_user",
         message: str = "",
@@ -347,6 +485,7 @@ class InvokeExecutorBase(ABC):
         description: str = "",
         instruction: str = "",
         history: InConversationHistory = None,
+        iteration: int = 1,
     ) -> AgentResponse:
         pass
 
@@ -359,6 +498,8 @@ class InvokeExecutorBase(ABC):
         history: InConversationHistory,
         mcp_client: DistributedMCPClient,
         mcp_server_name: str,
+        previous_prompt_tool: PromptToolResult,
+        iteration: int = 1,
     ) -> tuple[str, ToolMessage | None, bool]:
         pass
 
@@ -372,6 +513,7 @@ class InvokeExecutorBase(ABC):
         history: InConversationHistory = None,
         memory: Memory = None,
         user_id: str = None,
+        iteration: int = 1,
     ) -> AIMessage:
         pass
 
@@ -381,8 +523,15 @@ class AsyncInvokeExecutorBase(ABC):
     async def _step1_llm_define_tool_async(
         self,
         current_query: str,
-        iteration: int,
         max_history: int = None,
+        user_id: str = "unknown_user",
+        tools_manager: ToolManager = None,
+        memory: Memory = None,
+        skills: list = [],
+        description: str = "",
+        instruction: str = "",
+        history: InConversationHistory = None,
+        iteration: int = 1,
     ) -> AgentResponse:
         pass
 
@@ -392,7 +541,13 @@ class AsyncInvokeExecutorBase(ABC):
         query: str,
         current_query: str,
         response: AgentResponse,
-    ) -> tuple[str, ToolMessage | None, bool]:
+        tools_manager: ToolManager = None,
+        history: InConversationHistory = None,
+        mcp_client: DistributedMCPClient = None,
+        mcp_server_name: str = None,
+        previous_prompt_tool: PromptToolResult = None,
+        iteration: int = 1,
+    ) -> tuple[str, ToolMessage | None, bool, PromptToolResult | None]:
         pass
 
     @abstractmethod
@@ -403,6 +558,10 @@ class AsyncInvokeExecutorBase(ABC):
         is_tool_formatted: bool,
         is_save_memory: bool,
         max_history: int = None,
+        history: InConversationHistory = None,
+        memory: Memory = None,
+        user_id: str = None,
+        iteration: int = 1,
     ) -> AIMessage:
         pass
 
@@ -419,7 +578,6 @@ class StreamInvokeExecutorBase(ABC):
     @abstractmethod
     def _step1_llm_define_tool(
         self,
-        iteration: int = 1,
         max_history: int = 5,
         user_id: str = "unknown_user",
         message: str = "",
@@ -429,6 +587,7 @@ class StreamInvokeExecutorBase(ABC):
         description: str = "",
         instruction: str = "",
         history: InConversationHistory = None,
+        iteration: int = 1,
     ) -> AgentResponse:
         pass
 
@@ -441,6 +600,8 @@ class StreamInvokeExecutorBase(ABC):
         history: InConversationHistory,
         mcp_client: DistributedMCPClient,
         mcp_server_name: str,
+        previous_prompt_tool: PromptToolResult,
+        iteration: int = 1,
     ) -> tuple[str, ToolMessage | None, bool]:
         pass
 
@@ -454,6 +615,7 @@ class StreamInvokeExecutorBase(ABC):
         history: InConversationHistory = None,
         memory: Memory = None,
         user_id: str = None,
+        iteration: int = 1,
     ):
         pass
 
@@ -470,7 +632,6 @@ class AsyncStreamInvokeExecutorBase(ABC):
     @abstractmethod
     async def _step1_llm_define_tool_async(
         self,
-        iteration: int = 1,
         max_history: int = 5,
         user_id: str = "unknown_user",
         message: str = "",
@@ -480,6 +641,7 @@ class AsyncStreamInvokeExecutorBase(ABC):
         description: str = "",
         instruction: str = "",
         history: InConversationHistory = None,
+        iteration: int = 1,
     ) -> AgentResponse:
         pass
 
@@ -492,7 +654,9 @@ class AsyncStreamInvokeExecutorBase(ABC):
         history: "InConversationHistory",
         mcp_client: Any,
         mcp_server_name: str,
-    ) -> "tuple[str, Any, bool]":
+        previous_prompt_tool: PromptToolResult = None,
+        iteration: int = 1,
+    ) -> "tuple[str, Any, bool, Any]":
         pass
 
     @abstractmethod
@@ -506,6 +670,7 @@ class AsyncStreamInvokeExecutorBase(ABC):
         history: "InConversationHistory" = None,
         memory: "Memory" = None,
         user_id: str = None,
+        iteration: int = 1,
     ):
         """Async generator: stream final LLM summary chunks."""
         pass

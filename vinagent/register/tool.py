@@ -14,7 +14,7 @@ from pathlib import Path
 import shutil
 from vinagent.mcp import load_mcp_tools
 from vinagent.mcp.client import DistributedMCPClient
-from langchain_core.messages.tool import ToolMessage
+from langchain_core.messages import ToolMessage, AIMessage
 from langchain_core.language_models.base import BaseLanguageModel
 import asyncio
 import re
@@ -527,6 +527,7 @@ class ToolManager:
         mcp_server_name: str = None,
         module_path: str = None,
         tool_type: str = "function",
+        seconds_limit: int = 30,
     ) -> Any:
         """
         Execute the specified tool with the given arguments.
@@ -538,45 +539,37 @@ class ToolManager:
             mcp_server_name (str): Name of the MCP server.
             module_path (str): Path to the module for module-type tools.
             tool_type (str): Type of tool ('function', 'mcp', 'module', or 'agentskills').
+            seconds_limit (int): Maximum number of seconds to wait for the tool to complete.
+                Defaults to 30. If exceeded, returns a ToolMessage with is_error=True.
 
         Returns:
             Any: The result of the tool execution, typically a ToolMessage.
         """
-        try:
+
+        async def _dispatch():
+            message = AIMessage(content="Tool execution failed")
             if tool_type == "function":
-                message = await FunctionTool.execute(self, tool_name, arguments)
+                return await FunctionTool.execute(self, tool_name, arguments)
             elif tool_type == "mcp":
-                message = await MCPTool.execute(
+                return await MCPTool.execute(
                     self, tool_name, arguments, mcp_client, mcp_server_name
                 )
             elif tool_type == "module":
-                message = await ModuleTool.execute(
-                    self, tool_name, arguments, module_path
-                )
+                return await ModuleTool.execute(self, tool_name, arguments, module_path)
             elif tool_type == "agentskills":
-                message = await AgentSkillTool.execute(
+                return await AgentSkillTool.execute(
                     self, tool_name, arguments, module_path
                 )
             else:
                 raise ValueError(f"Unknown tool_type: '{tool_type}'")
 
-            # Validate that the returned message correctly propagates errors
-            if isinstance(message, str):
-                tools = self.load_tools()
-                tool_call_id = tools.get(tool_name, {}).get(
-                    "tool_call_id", f"tool_{uuid.uuid4()}"
-                )
-                message = ToolMessage(
-                    content=message,
-                    artifact=None,
-                    tool_call_id=tool_call_id,
-                    additional_kwargs={"is_error": True},
-                )
-
+        try:
+            message = await asyncio.wait_for(_dispatch(), timeout=seconds_limit)
             return message
-        except Exception as e:
+        except asyncio.TimeoutError:
             content = (
-                f"Error executing tool '{tool_name}': {type(e).__name__}: {str(e)}"
+                f"Tool '{tool_name}' timed out after {seconds_limit} seconds. "
+                "The tool took too long to complete and was cancelled."
             )
             logger.error(content)
             tools = self.load_tools()
@@ -589,6 +582,16 @@ class ToolManager:
                 tool_call_id=tool_call_id,
                 additional_kwargs={"is_error": True},
             )
+        except Exception as e:
+            content = (
+                f"Error executing tool '{tool_name}': {type(e).__name__}: {str(e)}"
+            )
+            logger.error(content)
+            tools = self.load_tools()
+            tool_call_id = tools.get(tool_name, {}).get(
+                "tool_call_id", f"tool_{uuid.uuid4()}"
+            )
+            return AIMessage(content=content)
 
     @staticmethod
     def _extract_json(text: str) -> Optional[str]:
@@ -646,9 +649,20 @@ class FunctionTool:
                 func = tool_manager._registered_functions[tool_name]
                 # artifact = await func(**arguments)
                 artifact = await asyncio.to_thread(func, **arguments)
-                content = f"Completed executing function tool {tool_name}({arguments})"
-                logger.info(content)
+                is_error = ("error" in str(artifact)) | ("failed" in str(artifact))
+                content = f"Completed executing function tool {tool_name}({arguments}) with return value: {str(artifact)[:500]}"
                 tool_call_id = registered_functions[tool_name]["tool_call_id"]
+                if is_error:
+                    content = f"Function tool {tool_name}({arguments})"
+                    logger.warning(content)
+                    message = ToolMessage(
+                        content=content,
+                        artifact=artifact,
+                        tool_call_id=tool_call_id,
+                        additional_kwargs={"is_error": True},
+                    )
+                    return message
+                logger.info(content)
                 message = ToolMessage(
                     content=content, artifact=artifact, tool_call_id=tool_call_id
                 )
@@ -666,6 +680,18 @@ class FunctionTool:
                     tool_call_id=tool_call_id,
                     additional_kwargs={"is_error": True},
                 )
+        else:
+            content = f"Function tool {tool_name} not found in registered functions. Did you forget to register it in this session?"
+            logger.error(content)
+            tool_call_id = registered_functions.get(tool_name, {}).get(
+                "tool_call_id", f"tool_{uuid.uuid4()}"
+            )
+            return ToolMessage(
+                content=content,
+                artifact=None,
+                tool_call_id=tool_call_id,
+                additional_kwargs={"is_error": True},
+            )
 
 
 class MCPTool:
@@ -821,6 +847,28 @@ class AgentSkillTool:
     )
 
     @classmethod
+    def _strip_markdown_fences(cls, command: str) -> str:
+        """
+        Remove markdown code fences (e.g. ```python ... ```) from a command
+        string.  LLMs sometimes wrap their output in fences even when a bare
+        script is expected.
+        """
+        stripped = command.strip()
+        # Match ```python, ```bash, ``` (with optional language tag) ... ```
+        import re as _re
+
+        fence_re = _re.compile(r"^```[\w]*(\n|\r\n)(.*?)(\n|\r\n)```\s*$", _re.DOTALL)
+        m = fence_re.match(stripped)
+        if m:
+            return m.group(2).strip()
+        # Also handle opening fence without closing (truncated output)
+        open_re = _re.compile(r"^```[\w]*(\n|\r\n)(.*)", _re.DOTALL)
+        m2 = open_re.match(stripped)
+        if m2:
+            return m2.group(2).strip()
+        return stripped
+
+    @classmethod
     def _is_python_code(cls, command: str) -> bool:
         """
         Heuristically decide whether *command* is a Python code block (to be
@@ -828,29 +876,36 @@ class AgentSkillTool:
 
         Rules applied in order (first match wins):
 
-        1. Starts with a shell prefix (``python ``, ``bash ``, etc.) → **shell**.
-        2. Contains a shell operator (``|``, ``&&``, ``>``, …) → **shell**.
-        3. ``ast.parse`` succeeds **and** the code is multi-line or contains a
-           recognisable Python keyword → **Python code**.
-        4. Anything else → **shell**.
+        1. Markdown code fences are stripped first.
+        2. Starts with a shell prefix (``python ``, ``bash ``, etc.) → **shell**.
+        3. Contains Python keywords → **Python code** (checked before AST to
+           avoid false-negatives from minor syntax errors in the snippet).
+        4. Contains a shell operator (``|``, ``&&``, ``>``, …) → **shell**.
+        5. ``ast.parse`` succeeds **and** the code is multi-line → **Python code**.
+        6. Anything else → **shell**.
         """
         import ast as _ast
 
-        stripped = command.strip()
+        stripped = cls._strip_markdown_fences(command)
 
-        # Rule 1 — explicit shell invocations are always shell commands
+        # Rule 2 — explicit shell invocations are always shell commands
         shell_prefixes = ("python ", "python3 ", "bash ", "sh ", "node ", "ruby ")
         if any(stripped.startswith(p) for p in shell_prefixes):
             return False
 
-        # Rule 2 — shell operators
+        # Rule 3 — Python keywords detected early (before AST, to avoid
+        # false-negatives when the snippet has a minor syntax issue)
+        if any(kw in stripped for kw in cls._PYTHON_KEYWORDS):
+            return True
+
+        # Rule 4 — shell operators
         if any(op in stripped for op in ("|", "&&", "||", " > ", " >> ", " < ")):
             return False
 
-        # Rule 3 — valid Python AST with Python-like content
+        # Rule 5 — valid Python AST and multi-line
         try:
             _ast.parse(stripped)
-            if "\n" in stripped or any(kw in stripped for kw in cls._PYTHON_KEYWORDS):
+            if "\n" in stripped:
                 return True
         except SyntaxError:
             pass
@@ -918,6 +973,8 @@ class AgentSkillTool:
             logger.error(content)
             return content
 
+        # Strip markdown fences the LLM may have added, then detect mode
+        command = cls._strip_markdown_fences(command)
         is_python = cls._is_python_code(command)
         mode = "python-code" if is_python else "shell"
         logger.info(
@@ -926,13 +983,27 @@ class AgentSkillTool:
         )
 
         def _run() -> "subprocess.CompletedProcess[str]":
+            import os
+
+            # Set up the environment to include working_dir in PYTHONPATH
+            # so the skill's local modules can still be imported, even though
+            # we are running from the main user cwd.
+            env = os.environ.copy()
+            current_pythonpath = env.get("PYTHONPATH", "")
+            env["PYTHONPATH"] = (
+                f"{working_dir}{os.pathsep}{current_pythonpath}"
+                if current_pythonpath
+                else str(working_dir)
+            )
+
+            run_cwd = os.getcwd()
+
             if is_python:
-                # Write the code to a temp file so that multi-line logic,
-                # imports, and print() all behave like a normal Python script.
+                # Write the code to a temp file in the system temp directory
+                # so that multi-line logic, imports, and print() behave normally.
                 with tempfile.NamedTemporaryFile(
                     mode="w",
                     suffix=".py",
-                    dir=str(working_dir),
                     delete=False,
                     encoding="utf-8",
                 ) as tmp:
@@ -943,8 +1014,8 @@ class AgentSkillTool:
                         [sys.executable, tmp_path],
                         capture_output=True,
                         text=True,
-                        cwd=str(working_dir),
-                        env=os.environ.copy(),  # inherit any env changes from fix_bug_command
+                        cwd=run_cwd,
+                        env=env,
                     )
                 finally:
                     try:
@@ -957,8 +1028,8 @@ class AgentSkillTool:
                     shell=True,
                     capture_output=True,
                     text=True,
-                    cwd=str(working_dir),
-                    env=os.environ.copy(),  # inherit any env changes from fix_bug_command
+                    cwd=run_cwd,
+                    env=env,
                 )
 
         tool_call_id = registered_functions.get(tool_name, {}).get(
@@ -1008,12 +1079,13 @@ class AgentSkillTool:
                     )
                     logger.warning(content)
 
-                return ToolMessage(
+                tool_message = ToolMessage(
                     content=content,
                     artifact=artifact,
                     tool_call_id=tool_call_id,
                     additional_kwargs={"is_error": True},
                 )
+                return tool_message
 
         except Exception as e:
             content = (
@@ -1046,6 +1118,13 @@ class ToolCall(BaseModel):
     is_runtime: bool = Field(
         default=False, description="Runtime value, is True if the tool_type is function"
     )
+
+    @field_validator("return_", mode="before")
+    @classmethod
+    def coerce_return_to_str(cls, v):
+        if v is None:
+            return "str"
+        return str(v)  # coerces 0, 1.5, True, etc. → "0", "1.5", "True"
 
     @field_validator("arguments", mode="before")
     @classmethod

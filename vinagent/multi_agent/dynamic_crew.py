@@ -30,7 +30,8 @@ Usage
         },
     )
 
-    result = crew.invoke("Write a combined market + tech analysis for Apple Inc.")
+    result = crew.invoke("Write a combined market + tech analysis for Apple Inc.",
+                         user_id="alice", thread_id="thread-1")
     print(result)
 """
 
@@ -38,7 +39,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Dict, List, Optional, Union
+from abc import ABC, abstractmethod
+from typing import Any, Awaitable, Dict, List, Optional, Union
 
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages import AIMessage
@@ -46,12 +48,14 @@ from langchain_openai.chat_models.base import BaseChatOpenAI
 from langchain_together import ChatTogether
 
 from vinagent.agent.agent import Agent
+from vinagent.oauth2.client import AuthenCard
 from vinagent.task.task import TaskGraph, TaskStep
+from vinagent.multi_agent.base import CrewBaseAgent
 
 logger = logging.getLogger(__name__)
 
 
-class DynamicCrew:
+class DynamicCrew(CrewBaseAgent):
     """
     Dynamic multi-agent orchestrator.
 
@@ -84,7 +88,10 @@ class DynamicCrew:
     max_iterations : int
         Max iterations forwarded to each member agent's ``invoke`` / ``ainvoke``.
     user_id : str
-        User identifier forwarded to agents that persist memory.
+        Default user identifier used when no ``user_id`` is passed to
+        ``invoke`` / ``ainvoke`` / ``stream``.
+    authen_card : AuthenCard, optional
+        Authentication card for verifying access tokens before each invocation.
     """
 
     DEFAULT_PLANNER_PROMPT = (
@@ -119,7 +126,7 @@ class DynamicCrew:
         aggregator: Optional[Agent] = None,
         planner_prompt: Optional[str] = None,
         max_iterations: int = 5,
-        user_id: str = "unknown_user",
+        authen_card: Optional[AuthenCard] = None,
     ):
         if not agents:
             raise ValueError("DynamicCrew requires at least one member agent.")
@@ -129,16 +136,16 @@ class DynamicCrew:
         self.aggregator = aggregator
         self.planner_prompt = planner_prompt or self.DEFAULT_PLANNER_PROMPT
         self.max_iterations = max_iterations
-        self.user_id = user_id
+        self.config = {
+            "configurable": {"user_id": "unknown_user"},
+            "thread_id": 123,
+        }
+        self.authen_card = authen_card
 
         # Build structured-output planner once
         self._structured_planner = self.llm.with_structured_output(
             TaskGraph, method="function_calling"
         )
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
 
     def _agent_list_str(self) -> str:
         """Return a readable list of available agent names for the planner."""
@@ -163,7 +170,6 @@ class DynamicCrew:
         )
         logger.info("DynamicCrew: invoking Planner (async) …")
         task_graph: TaskGraph = await self._structured_planner.ainvoke(prompt)
-        logger.info(f"DynamicCrew: plan produced {len(task_graph.steps)} step(s).")
         self._logging_plan(task_graph)
         return task_graph
 
@@ -172,7 +178,7 @@ class DynamicCrew:
         logger.info(f"DynamicCrew: plan produced {len(plan.steps)} step(s).")
         full_content = ""
         for i, step in enumerate(plan.steps):
-            content = self._logging_step(step, i, is_show_log=False)
+            content = self._logging_step(step, i + 1, is_show_log=False)
             full_content += content
         logger.info(full_content)
         return full_content
@@ -180,7 +186,7 @@ class DynamicCrew:
     def _logging_step(
         self, step: TaskStep, step_num: int = 1, is_show_log: bool = True
     ):
-        """Log the plan."""
+        """Log a single step."""
         content = (
             f"\nStep {step_num}: {step.description}\n"
             f"  └─ Task ID: {step.task_id}\n"
@@ -192,7 +198,12 @@ class DynamicCrew:
         return content
 
     def _run_step_sync(
-        self, step: TaskStep, results: Dict[str, str], step_num: int = 1
+        self,
+        step: TaskStep,
+        results: Dict[str, str],
+        step_num: int = 1,
+        user_id: str = "unknown_user",
+        thread_id: str = "123",
     ) -> str:
         """Execute a single TaskStep synchronously."""
         agent = self.agents.get(step.agent_name)
@@ -202,24 +213,28 @@ class DynamicCrew:
                 f"Available: {list(self.agents)}"
             )
         prompt = self._build_step_prompt(step, results)
-
-        self._logging_step(step, step_num)
-
         logger.info(
             "\n"
             + "-" * 78
             + "\n"
             + f"DynamicCrew: running step '{step.task_id}' on agent '{step.agent_name}'"
         )
+        self._logging_step(step, step_num)
+        logger.info(f"prompt: {prompt}")
         response = agent.invoke(
             prompt,
             max_iterations=self.max_iterations,
-            user_id=self.user_id,
+            user_id=user_id,
         )
         return response.content if hasattr(response, "content") else str(response)
 
     async def _run_step_async(
-        self, step: TaskStep, results: Dict[str, str], step_num: int = 1
+        self,
+        step: TaskStep,
+        results: Dict[str, str],
+        step_num: int = 1,
+        user_id: str = "unknown_user",
+        thread_id: str = "123",
     ) -> str:
         """Execute a single TaskStep asynchronously."""
         agent = self.agents.get(step.agent_name)
@@ -229,19 +244,18 @@ class DynamicCrew:
                 f"Available: {list(self.agents)}"
             )
         prompt = self._build_step_prompt(step, results)
-
-        self._logging_step(step, step_num)
-
         logger.info(
             "\n"
             + "-" * 78
             + "\n"
             + f"DynamicCrew: running step '{step.task_id}' (async) on agent '{step.agent_name}'"
         )
+        self._logging_step(step, step_num)
+        logger.info(f"prompt: {prompt}")
         response = await agent.ainvoke(
             prompt,
             max_iterations=self.max_iterations,
-            user_id=self.user_id,
+            user_id=user_id,
         )
         return response.content if hasattr(response, "content") else str(response)
 
@@ -250,9 +264,6 @@ class DynamicCrew:
         Build the full prompt for a step, injecting prior outputs and the
         expected_output hint.
         """
-        # Delegate template rendering to TaskGraph helper
-        from vinagent.task.task import TaskGraph as _TG  # avoid circular ref warning
-
         rendered = step.input_context
         try:
             rendered = step.input_context.format(**results)
@@ -262,7 +273,13 @@ class DynamicCrew:
             )
         return f"{rendered}\n\n" f"Expected output: {step.expected_output}"
 
-    def _aggregate_sync(self, query: str, results: Dict[str, str]) -> str:
+    def _aggregate_sync(
+        self,
+        query: str,
+        results: Dict[str, str],
+        user_id: str = "unknown_user",
+        thread_id: str = "123",
+    ) -> str:
         """Run the aggregation phase synchronously."""
         results_text = "\n\n".join(f"[{tid}]\n{out}" for tid, out in results.items())
         if self.aggregator:
@@ -274,7 +291,7 @@ class DynamicCrew:
             response = self.aggregator.invoke(
                 prompt,
                 max_iterations=self.max_iterations,
-                user_id=self.user_id,
+                user_id=user_id,
             )
             return response.content if hasattr(response, "content") else str(response)
         else:
@@ -284,7 +301,13 @@ class DynamicCrew:
             response = self.llm.invoke(agg_prompt)
             return response.content if hasattr(response, "content") else str(response)
 
-    async def _aggregate_async(self, query: str, results: Dict[str, str]) -> str:
+    async def _aggregate_async(
+        self,
+        query: str,
+        results: Dict[str, str],
+        user_id: str = "unknown_user",
+        thread_id: str = "123",
+    ) -> str:
         """Run the aggregation phase asynchronously."""
         results_text = "\n\n".join(f"[{tid}]\n{out}" for tid, out in results.items())
         if self.aggregator:
@@ -296,7 +319,7 @@ class DynamicCrew:
             response = await self.aggregator.ainvoke(
                 prompt,
                 max_iterations=self.max_iterations,
-                user_id=self.user_id,
+                user_id=user_id,
             )
             return response.content if hasattr(response, "content") else str(response)
         else:
@@ -310,27 +333,41 @@ class DynamicCrew:
     # Public interface
     # ------------------------------------------------------------------
 
-    def invoke(self, query: str, **kwargs) -> str:
+    def invoke(
+        self,
+        query: str,
+        user_id: str = "unknown_user",
+        thread_id: str = "123",
+        **kwargs,
+    ) -> str:
         """
         Synchronously orchestrate the full DynamicCrew pipeline.
 
         Steps
         -----
-        1. Plan   → TaskGraph (structured LLM call)
-        2. Execute → level-by-level (parallel steps run sequentially here;
+        1. Authenticate
+        2. Initialize state (user_id, thread_id)
+        3. Plan   → TaskGraph (structured LLM call)
+        4. Execute → level-by-level (parallel steps run sequentially here;
                      for true parallelism use :meth:`ainvoke`)
-        3. Aggregate → final answer
+        5. Aggregate → final answer
 
         Parameters
         ----------
         query : str
             The user's request.
+        user_id : str
+            The unique identifier for the user.
+        thread_id : str
+            The conversation thread identifier.
 
         Returns
         -------
         str
             The aggregated final answer.
         """
+        self.authenticate()
+
         task_graph = self._plan(query)
         levels = task_graph.topological_levels()
 
@@ -343,17 +380,27 @@ class DynamicCrew:
                 f"DynamicCrew.invoke: executing level {level_idx + 1}/{len(levels)} "
                 f"with {len(level)} step(s): {[s.task_id for s in level]}"
             )
-            # In sync mode, run each step sequentially even if they are
-            # topologically parallel (use ainvoke for true concurrency)
             for step in level:
                 results[step.task_id] = self._run_step_sync(
-                    step, results, step_num=step_number[step.task_id]
+                    step,
+                    results,
+                    step_num=step_number[step.task_id],
+                    user_id=user_id,
+                    thread_id=thread_id,
                 )
 
         logger.info("DynamicCrew.invoke: all steps done, aggregating …")
-        return self._aggregate_sync(query, results)
+        return self._aggregate_sync(
+            query, results, user_id=user_id, thread_id=thread_id
+        )
 
-    async def ainvoke(self, query: str, **kwargs) -> str:
+    async def ainvoke(
+        self,
+        query: str,
+        user_id: str = "unknown_user",
+        thread_id: str = "123",
+        **kwargs,
+    ) -> str:
         """
         Asynchronously orchestrate the full DynamicCrew pipeline.
 
@@ -364,12 +411,18 @@ class DynamicCrew:
         ----------
         query : str
             The user's request.
+        user_id : str
+            The unique identifier for the user.
+        thread_id : str
+            The conversation thread identifier.
 
         Returns
         -------
         str
             The aggregated final answer.
         """
+        self.authenticate()
+
         task_graph = await self._plan_async(query)
         levels = task_graph.topological_levels()
 
@@ -386,7 +439,11 @@ class DynamicCrew:
             step_outputs = await asyncio.gather(
                 *[
                     self._run_step_async(
-                        step, results, step_num=step_number[step.task_id]
+                        step,
+                        results,
+                        step_num=step_number[step.task_id],
+                        user_id=user_id,
+                        thread_id=thread_id,
                     )
                     for step in level
                 ]
@@ -395,7 +452,80 @@ class DynamicCrew:
                 results[step.task_id] = output
 
         logger.info("DynamicCrew.ainvoke: all steps done, aggregating …")
-        return await self._aggregate_async(query, results)
+        return await self._aggregate_async(
+            query, results, user_id=user_id, thread_id=thread_id
+        )
+
+    def stream(
+        self,
+        query: str,
+        user_id: str = "unknown_user",
+        thread_id: str = "123",
+        **kwargs,
+    ):
+        """
+        Stream the DynamicCrew pipeline, yielding step results as they complete.
+
+        Each step result is yielded as a dict::
+
+            {"task_id": str, "agent_name": str, "output": str}
+
+        The final aggregated answer is yielded last as::
+
+            {"task_id": "__aggregated__", "output": str}
+
+        Parameters
+        ----------
+        query : str
+            The user's request.
+        user_id : str
+            The unique identifier for the user.
+        thread_id : str
+            The conversation thread identifier.
+
+        Yields
+        ------
+        dict
+            Step result dicts followed by the aggregated final answer dict.
+        """
+        self.authenticate()
+
+        task_graph = self._plan(query)
+        levels = task_graph.topological_levels()
+
+        all_steps = [step for level in levels for step in level]
+        step_number = {step.task_id: i for i, step in enumerate(all_steps, start=1)}
+
+        results: Dict[str, str] = {}
+        for level_idx, level in enumerate(levels):
+            logger.info(
+                f"DynamicCrew.stream: executing level {level_idx + 1}/{len(levels)} "
+                f"with {len(level)} step(s): {[s.task_id for s in level]}"
+            )
+            for step in level:
+                output = self._run_step_sync(
+                    step,
+                    results,
+                    step_num=step_number[step.task_id],
+                    user_id=user_id,
+                    thread_id=thread_id,
+                )
+                results[step.task_id] = output
+                yield {
+                    "task_id": step.task_id,
+                    "agent_name": step.agent_name,
+                    "output": output,
+                }
+
+        logger.info("DynamicCrew.stream: all steps done, aggregating …")
+        final = self._aggregate_sync(
+            query, results, user_id=user_id, thread_id=thread_id
+        )
+        yield {"task_id": "__aggregated__", "output": final}
+
+    # ------------------------------------------------------------------
+    # Utility
+    # ------------------------------------------------------------------
 
     def get_plan(self, query: str) -> TaskGraph:
         """

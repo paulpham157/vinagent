@@ -21,6 +21,12 @@ With its modular tool system, you can easily extend your agent's capabilities by
 
 # 2. Version
 
+* Date 25-03-2026: [Version 0.0.9](https://github.com/datascienceworld-kan/vinagent/releases/tag/v0.0.9) target at Autonomous Multi-Agent features:
+    - You can add multiple agents as a unique Team.
+    - Autonomously planning tasks for agents in the team.
+    - Triggering agents to execute tasks according to plan.
+    - Aggregating results from all agents.
+
 * Date 12-03-2026: [Version 0.0.7](https://github.com/datascienceworld-kan/vinagent/releases/tag/v0.0.7) is a big upgrade with many new features:
     - Refactor code to decouple Agent class's invoking logic into multiple executors: InvokeExecutor, AsyncInvokeExecutor, - StreamInvokeExecutor, AsyncStreamInvokeExecutor, GraphExecutor.
     - Guardrail System for input, output, and tools

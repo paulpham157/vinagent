@@ -279,6 +279,7 @@ class Agent(AgentMeta):
         input_guardrail: GuardrailDecision = None,
         output_guardrail: OutputGuardrailDecision = None,
         guardrail_manager: GuardrailManager = None,
+        seconds_limit: int = 30,
         *args,
         **kwargs,
     ):
@@ -429,11 +430,16 @@ class Agent(AgentMeta):
             output_guardrail=self.output_guardrail,
             guardrail_manager=self.guardrail_manager,
         )
+        self.seconds_limit = seconds_limit
         self.invoke_executor = InvokeExecutor(
-            llm=self.llm, guardrail_executor=self.guardrail_executor
+            llm=self.llm,
+            guardrail_executor=self.guardrail_executor,
+            seconds_limit=seconds_limit,
         )
         self.async_invoke_executor = AsyncInvokeExecutor(
-            llm=self.llm, guardrail_executor=self.guardrail_executor
+            llm=self.llm,
+            guardrail_executor=self.guardrail_executor,
+            seconds_limit=seconds_limit,
         )
         self.graph_executor = GraphExecutor(
             compiled_graph=self.compiled_graph,
@@ -442,35 +448,43 @@ class Agent(AgentMeta):
             thread_id=self._thread_id,
         )
         self.stream_invoke_executor = StreamInvokeExecutor(
-            llm=self.llm, guardrail_executor=self.guardrail_executor
+            llm=self.llm,
+            guardrail_executor=self.guardrail_executor,
+            seconds_limit=seconds_limit,
         )
         self.async_stream_invoke_executor = AsyncStreamInvokeExecutor(
-            llm=self.llm, guardrail_executor=self.guardrail_executor
+            llm=self.llm,
+            guardrail_executor=self.guardrail_executor,
+            seconds_limit=seconds_limit,
         )
 
     def authenticate(self):
         if self.authen_card is None:
-            logger.info("No authentication card provided, skipping authentication")
+            logger.info(
+                f"[{self.name}] No authentication card provided, skipping authentication"
+            )
             return True
 
         is_enable_access = self.authen_card.verify_access_token()
         if is_enable_access:
-            logger.info(f"Successfully authenticated!")
+            logger.info(f"[{self.name}] Successfully authenticated!")
         else:
-            logger.info(f"Authentication failed!")
+            logger.info(f"[{self.name}] Authentication failed!")
             raise Exception("Authentication failed!")
         return is_enable_access
 
     async def connect_mcp_tool(self):
-        logger.info(f"{self.mcp_client}: {self.mcp_server_name}")
+        logger.info(f"[{self.name}] {self.mcp_client}: {self.mcp_server_name}")
         if self.mcp_client and self.mcp_server_name:
             mcp_tools = await self.tools_manager.register_mcp_tool(
                 self.mcp_client, self.mcp_server_name
             )
-            logger.info(f"Successfully connected to mcp server {self.mcp_server_name}!")
+            logger.info(
+                f"[{self.name}] Successfully connected to mcp server {self.mcp_server_name}!"
+            )
         elif self.mcp_client:
             mcp_tools = await self.tools_manager.register_mcp_tool(self.mcp_client)
-            logger.info(f"Successfully connected to mcp server!")
+            logger.info(f"[{self.name}] Successfully connected to mcp server!")
         return f"Successfully connected to mcp server! mcp_tools: {mcp_tools}"
 
     def initialize_flow(self, state_schema: TypedDict, config_schema: TypedDict):
@@ -531,7 +545,7 @@ class Agent(AgentMeta):
         # --- Auth & user setup ---
         self.authenticate()
         self._user_id = user_id or self._user_id
-        logger.info(f"I am chatting with {self._user_id}")
+        logger.info(f"[{self.name}] I am chatting with {self._user_id}")
 
         if self.memory and is_save_memory:
             self.save_memory(query, user_id=self._user_id)
@@ -552,13 +566,15 @@ class Agent(AgentMeta):
         # --- Tool calling loop ---
         current_query = query
         tool_message = None
+        current_prompt_tool = None
 
         for iteration in range(1, max_iterations + 1):
-            logger.info(f"Tool calling iteration {iteration}/{max_iterations}")
+            logger.info(
+                f"[{self.name}] Tool calling iteration {iteration}/{max_iterations}"
+            )
 
             # Step 1: LLM invoke
             response = self.invoke_executor._step1_llm_define_tool(
-                iteration=iteration,
                 max_history=max_history,
                 user_id=user_id,
                 message=current_query,
@@ -568,23 +584,28 @@ class Agent(AgentMeta):
                 description=self.description,
                 instruction=self.instruction,
                 history=self.in_conversation_history,
+                iteration=iteration,
             )
-
+            logger.info(f"[{self.name}] Response: {response}")
             # Early exit: direct answer with no tool needed
-            if not getattr(response, "requires_tool", False) and getattr(
-                response, "answer", None
+            if (
+                not getattr(response, "requires_tool", False)
+                and not getattr(response, "fix_bug_command", None)
+                and getattr(response, "answer", None)
             ):
                 answer = response.answer
                 logger.info(
-                    f"No more tool calls needed. Completed in {iteration} iterations."
+                    f"[{self.name}] No more tool calls needed. Completed in {iteration} iterations."
                 )
                 self.guardrail_executor.check_output_guardrail(answer)
                 if self.memory and is_save_memory:
                     self.save_memory(message=answer, user_id=self._user_id)
-                return AIMessage(content=answer)
+                final_msg = AIMessage(content=answer, iteration_id=iteration)
+                self.in_conversation_history.add_message(final_msg)
+                return final_msg
 
             # Step 2: Tool invoke
-            current_query, tool_message, should_continue = (
+            current_query, tool_message, should_continue, current_prompt_tool = (
                 self.invoke_executor._step2_tool_invoke(
                     current_query=current_query,
                     response=response,
@@ -592,6 +613,8 @@ class Agent(AgentMeta):
                     history=self.in_conversation_history,
                     mcp_client=self.mcp_client,
                     mcp_server_name=self.mcp_server_name,
+                    previous_prompt_tool=current_prompt_tool,
+                    iteration=iteration,
                 )
             )
 
@@ -601,11 +624,15 @@ class Agent(AgentMeta):
                 self.guardrail_executor.check_output_guardrail(answer)
                 if self.memory and is_save_memory:
                     self.save_memory(message=answer, user_id=self._user_id)
-                return AIMessage(content=answer)
+                final_msg = AIMessage(content=answer, iteration_id=iteration)
+                self.in_conversation_history.add_message(
+                    final_msg, iteration_id=iteration
+                )
+                return final_msg
 
         # Step 3: Max iterations reached — format final response
         logger.warning(
-            f"Reached maximum iterations ({max_iterations}). Stopping tool calling loop."
+            f"[{self.name}] Reached maximum iterations ({max_iterations}). Stopping tool calling loop."
         )
         return self.invoke_executor._step3_final_response(
             query=current_query,
@@ -616,6 +643,7 @@ class Agent(AgentMeta):
             history=self.in_conversation_history,
             memory=self.memory,
             user_id=user_id,
+            iteration=iteration,
         )
 
     async def ainvoke(
@@ -631,7 +659,7 @@ class Agent(AgentMeta):
         # --- Auth & user setup ---
         self.authenticate()
         self._user_id = user_id or self._user_id
-        logger.info(f"I am chatting with {self._user_id}")
+        logger.info(f"[{self.name}] I am chatting with {self._user_id}")
 
         if self.memory and is_save_memory:
             self.save_memory(query, user_id=self._user_id)
@@ -652,13 +680,14 @@ class Agent(AgentMeta):
         # --- Tool calling loop ---
         current_query = query
         tool_message = None
-
+        current_prompt_tool = None
         for iteration in range(1, max_iterations + 1):
-            logger.info(f"Async tool calling iteration {iteration}/{max_iterations}")
+            logger.info(
+                f"[{self.name}] Async tool calling iteration {iteration}/{max_iterations}"
+            )
 
             # Step 1: LLM invoke (reused directly — sync, no await needed)
             response = await self.async_invoke_executor._step1_llm_define_tool_async(
-                iteration=iteration,
                 max_history=max_history,
                 user_id=user_id,
                 message=current_query,
@@ -668,24 +697,29 @@ class Agent(AgentMeta):
                 description=self.description,
                 instruction=self.instruction,
                 history=self.in_conversation_history,
+                iteration=iteration,
             )
 
-            logger.info(f"Response: {response}")
+            logger.info(f"[{self.name}] Response: {response}")
             # Early exit: direct answer with no tool needed
-            if not getattr(response, "requires_tool", False) and getattr(
-                response, "answer", None
+            if (
+                not getattr(response, "requires_tool", False)
+                and not getattr(response, "fix_bug_command", None)
+                and getattr(response, "answer", None)
             ):
                 answer = response.answer
                 logger.info(
-                    f"No more tool calls needed. Completed in {iteration} iterations."
+                    f"[{self.name}] No more tool calls needed. Completed in {iteration} iterations."
                 )
                 self.guardrail_executor.check_output_guardrail(answer)
                 if self.memory and is_save_memory:
                     self.save_memory(message=answer, user_id=self._user_id)
-                return AIMessage(content=answer)
+                final_msg = AIMessage(content=answer, iteration_id=iteration)
+                self.in_conversation_history.add_message(final_msg)
+                return final_msg
 
             # Step 2: Tool invoke (async variant — await replaces asyncio.run)
-            current_query, tool_message, should_continue = (
+            current_query, tool_message, should_continue, current_prompt_tool = (
                 await self.async_invoke_executor._step2_tool_invoke_async(
                     current_query=current_query,
                     response=response,
@@ -693,6 +727,8 @@ class Agent(AgentMeta):
                     history=self.in_conversation_history,
                     mcp_client=self.mcp_client,
                     mcp_server_name=self.mcp_server_name,
+                    previous_prompt_tool=current_prompt_tool,
+                    iteration=iteration,
                 )
             )
 
@@ -701,11 +737,13 @@ class Agent(AgentMeta):
                 self.guardrail_executor.check_output_guardrail(answer)
                 if self.memory and is_save_memory:
                     self.save_memory(message=answer, user_id=self._user_id)
-                return AIMessage(content=answer)
+                final_msg = AIMessage(content=answer, iteration_id=iteration)
+                self.in_conversation_history.add_message(final_msg)
+                return final_msg
 
         # Step 3: Max iterations reached — format final response (async variant)
         logger.warning(
-            f"Reached maximum iterations ({max_iterations}). Stopping async tool calling loop."
+            f"[{self.name}] Reached maximum iterations ({max_iterations}). Stopping async tool calling loop."
         )
         return await self.async_invoke_executor._step3_final_response_async(
             query=current_query,
@@ -716,6 +754,7 @@ class Agent(AgentMeta):
             history=self.in_conversation_history,
             memory=self.memory,
             user_id=user_id,
+            iteration=iteration,
         )
 
     def stream(
@@ -761,7 +800,7 @@ class Agent(AgentMeta):
         # --- Auth & user setup ---
         self.authenticate()
         self._user_id = user_id or self._user_id
-        logger.info(f"I am chatting with {self._user_id}")
+        logger.info(f"[{self.name}] I am chatting with {self._user_id}")
 
         if self.memory and is_save_memory:
             self.save_memory(query, user_id=self._user_id)
@@ -793,15 +832,14 @@ class Agent(AgentMeta):
             # --- Tool calling loop ---
             current_query = query
             tool_message = None
-
+            current_prompt_tool = None
             for iteration in range(1, max_iterations + 1):
                 logger.info(
-                    f"Streaming tool calling iteration {iteration}/{max_iterations}"
+                    f"[{self.name}] Streaming tool calling iteration {iteration}/{max_iterations}"
                 )
 
                 # Step 1: Ask LLM (structured output) whether a tool is needed
                 response = self.stream_invoke_executor._step1_llm_define_tool(
-                    iteration=iteration,
                     max_history=max_history,
                     user_id=user_id,
                     message=current_query,
@@ -811,22 +849,27 @@ class Agent(AgentMeta):
                     description=self.description,
                     instruction=self.instruction,
                     history=self.in_conversation_history,
+                    iteration=iteration,
                 )
-                logger.info(f"response: {response}")
+                logger.info(f"[{self.name}] response: {response}")
                 # Early exit: direct answer — stream it token-by-token
-                if not getattr(response, "requires_tool", False) and getattr(
-                    response, "answer", None
+                if (
+                    not getattr(response, "requires_tool", False)
+                    and not getattr(response, "fix_bug_command", None)
+                    and getattr(response, "answer", None)
                 ):
                     logger.info(
-                        f"No tool needed. Streaming direct answer (iteration {iteration})."
+                        f"[{self.name}] No tool needed. Streaming direct answer (iteration {iteration})."
                     )
                     answer_text = response.answer
                     for chunk in answer_text:
                         chunk = AIMessageChunk(content=chunk)
                         yield chunk
                     self.guardrail_executor.check_output_guardrail(answer_text)
-                    full_chunk = AIMessage(content=answer_text)
-                    self.in_conversation_history.add_message(full_chunk)
+                    full_chunk = AIMessage(content=answer_text, iteration_id=iteration)
+                    self.in_conversation_history.add_message(
+                        full_chunk, iteration_id=iteration
+                    )
                     # Stream the direct answer chunk-by-chunk via a short llm.stream call
                     # Re-add message to history so the next prompt is correct
                     if self.memory and is_save_memory:
@@ -837,10 +880,11 @@ class Agent(AgentMeta):
                         try:
                             tool_call = json.loads(answer_text)
                             logger.info(
-                                "Detected JSON tool call in answer, preparing next iteration."
+                                f"[{self.name}] Detected JSON tool call in answer, preparing next iteration."
                             )
                             current_query = AIMessage(
-                                content=f"Let's call tool: {json.dumps(tool_call)}"
+                                content=f"Let's call tool: {json.dumps(tool_call)}",
+                                iteration_id=iteration,
                             )
                             continue
 
@@ -848,8 +892,8 @@ class Agent(AgentMeta):
                             return
 
                 # Step 2: Execute the tool (synchronous — no streaming here)
-                logging.info(f"current_query: {current_query}")
-                current_query, tool_message, should_continue = (
+                logging.info(f"[{self.name}] current_query: {current_query}")
+                current_query, tool_message, should_continue, current_prompt_tool = (
                     self.stream_invoke_executor._step2_tool_invoke(
                         current_query=current_query,
                         response=response,
@@ -857,6 +901,8 @@ class Agent(AgentMeta):
                         history=self.in_conversation_history,
                         mcp_client=self.mcp_client,
                         mcp_server_name=self.mcp_server_name,
+                        previous_prompt_tool=current_prompt_tool,
+                        iteration=iteration,
                     )
                 )
 
@@ -866,12 +912,16 @@ class Agent(AgentMeta):
                     self.guardrail_executor.check_output_guardrail(answer_text)
                     if self.memory and is_save_memory:
                         self.save_memory(message=answer_text, user_id=self._user_id)
-                    yield AIMessage(content=answer_text)
+                    final_msg = AIMessage(content=answer_text, iteration_id=iteration)
+                    self.in_conversation_history.add_message(
+                        final_msg, iteration_id=iteration
+                    )
+                    yield final_msg
                     return
 
             # Step 3: Max iterations — stream the final LLM summary
             logger.warning(
-                f"Reached maximum iterations ({max_iterations}). Stopping streaming loop."
+                f"[{self.name}] Reached maximum iterations ({max_iterations}). Stopping streaming loop."
             )
             yield from self.stream_invoke_executor._step3_final_response_stream(
                 query=current_query,
@@ -882,11 +932,14 @@ class Agent(AgentMeta):
                 history=self.in_conversation_history,
                 memory=self.memory,
                 user_id=user_id,
+                iteration=iteration,
             )
 
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            logger.error(f"An error occurred during streaming: {str(e)}")
-            yield AIMessage(content=f"An error occurred: {str(e)}")
+            logger.error(f"[{self.name}] An error occurred during streaming: {str(e)}")
+            yield AIMessage(
+                content=f"An error occurred: {str(e)}", iteration_id=iteration
+            )
 
     async def astream(
         self,
@@ -928,7 +981,7 @@ class Agent(AgentMeta):
         # --- Auth & user setup ---
         self.authenticate()
         self._user_id = user_id or self._user_id
-        logger.info(f"I am chatting with {self._user_id}")
+        logger.info(f"[{self.name}] I am chatting with {self._user_id}")
 
         if self.memory and is_save_memory:
             self.save_memory(query, user_id=self._user_id)
@@ -955,14 +1008,13 @@ class Agent(AgentMeta):
             # --- Tool calling loop ---
             current_query = query
             tool_message = None
-
+            current_prompt_tool = None
             for iteration in range(1, max_iterations + 1):
                 logger.info(
-                    f"Async streaming tool calling iteration {iteration}/{max_iterations}"
+                    f"[{self.name}] Async streaming tool calling iteration {iteration}/{max_iterations}"
                 )
 
                 response = await self.async_stream_invoke_executor._step1_llm_define_tool_async(
-                    iteration=iteration,
                     max_history=max_history,
                     user_id=user_id,
                     message=current_query,
@@ -972,23 +1024,28 @@ class Agent(AgentMeta):
                     description=self.description,
                     instruction=self.instruction,
                     history=self.in_conversation_history,
+                    iteration=iteration,
                 )
 
-                logger.info(f"Response from LLM: {response}")
+                logger.info(f"[{self.name}] Response from LLM: {response}")
                 # Early exit: direct answer — async-stream it token-by-token
-                if not getattr(response, "requires_tool", False) and getattr(
-                    response, "answer", None
+                if (
+                    not getattr(response, "requires_tool", False)
+                    and not getattr(response, "fix_bug_command", None)
+                    and getattr(response, "answer", None)
                 ):
                     logger.info(
-                        f"No tool needed. Async-streaming direct answer (iteration {iteration})."
+                        f"[{self.name}] No tool needed. Async-streaming direct answer (iteration {iteration})."
                     )
                     answer_text = response.answer
                     for chunk in answer_text:
                         chunk = AIMessageChunk(content=chunk)
                         yield chunk
                     self.guardrail_executor.check_output_guardrail(answer_text)
-                    full_chunk = AIMessage(content=answer_text)
-                    self.in_conversation_history.add_message(full_chunk)
+                    full_chunk = AIMessage(content=answer_text, iteration_id=iteration)
+                    self.in_conversation_history.add_message(
+                        full_chunk, iteration_id=iteration
+                    )
                     # Stream the direct answer chunk-by-chunk via a short llm.stream call
                     # Re-add message to history so the next prompt is correct
                     if self.memory and is_save_memory:
@@ -999,10 +1056,11 @@ class Agent(AgentMeta):
                         try:
                             tool_call = json.loads(answer_text)
                             logger.info(
-                                "Detected JSON tool call in answer, preparing next iteration."
+                                f"[{self.name}] Detected JSON tool call in answer, preparing next iteration."
                             )
                             current_query = AIMessage(
-                                content=f"Let's call tool: {json.dumps(tool_call)}"
+                                content=f"Let's call tool: {json.dumps(tool_call)}",
+                                iteration_id=iteration,
                             )
                             continue
 
@@ -1010,7 +1068,7 @@ class Agent(AgentMeta):
                             return
 
                 # Step 2: Execute tool asynchronously
-                current_query, tool_message, should_continue = (
+                current_query, tool_message, should_continue, current_prompt_tool = (
                     await self.async_stream_invoke_executor._step2_tool_invoke_async(
                         current_query=current_query,
                         response=response,
@@ -1018,6 +1076,8 @@ class Agent(AgentMeta):
                         history=self.in_conversation_history,
                         mcp_client=self.mcp_client,
                         mcp_server_name=self.mcp_server_name,
+                        previous_prompt_tool=current_prompt_tool,
+                        iteration=iteration,
                     )
                 )
 
@@ -1026,12 +1086,16 @@ class Agent(AgentMeta):
                     self.guardrail_executor.check_output_guardrail(answer_text)
                     if self.memory and is_save_memory:
                         self.save_memory(message=answer_text, user_id=self._user_id)
-                    yield AIMessage(content=answer_text)
+                    final_msg = AIMessage(content=answer_text, iteration_id=iteration)
+                    self.in_conversation_history.add_message(
+                        final_msg, iteration_id=iteration
+                    )
+                    yield final_msg
                     return
 
             # Step 3: Max iterations — async-stream final LLM summary
             logger.warning(
-                f"Reached maximum iterations ({max_iterations}). Stopping async streaming loop."
+                f"[{self.name}] Reached maximum iterations ({max_iterations}). Stopping async streaming loop."
             )
             async for (
                 chunk
@@ -1044,12 +1108,17 @@ class Agent(AgentMeta):
                 history=self.in_conversation_history,
                 memory=self.memory,
                 user_id=user_id,
+                iteration=iteration,
             ):
                 yield chunk
 
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            logger.error(f"An error occurred during async streaming: {str(e)}")
-            yield AIMessage(content=f"An error occurred: {str(e)}")
+            logger.error(
+                f"[{self.name}] An error occurred during async streaming: {str(e)}"
+            )
+            yield AIMessage(
+                content=f"An error occurred: {str(e)}", iteration_id=iteration
+            )
 
     def save_memory(
         self, message: Union[ToolMessage, AIMessage], user_id: str = "unknown_user"
@@ -1060,22 +1129,28 @@ class Agent(AgentMeta):
         if self.memory:
             if isinstance(message, str):
                 self.memory.save_short_term_memory(self.llm, message, user_id=user_id)
-                logging.info(f"Saved to memory the query: {message}")
+                logging.info(f"[{self.name}] Saved to memory the query: {message}")
             elif isinstance(message, AIMessage):
                 self.memory.save_short_term_memory(
                     self.llm, message.content, user_id=user_id
                 )
-                logging.info(f"Saved to memory the ai message: {message.content}")
+                logging.info(
+                    f"[{self.name}] Saved to memory the ai message: {message.content}"
+                )
             elif isinstance(message.artifact, str):
                 self.memory.save_short_term_memory(
                     self.llm, message.artifact, user_id=user_id
                 )
-                logging.info(f"Saved to memory the tool artifact: {message.artifact}")
+                logging.info(
+                    f"[{self.name}] Saved to memory the tool artifact: {message.artifact}"
+                )
             else:
                 self.memory.save_short_term_memory(
                     self.llm, message.content, user_id=user_id
                 )
-                logging.info(f"Saved to memory the tool content: {message.content}")
+                logging.info(
+                    f"[{self.name}] Saved to memory the tool content: {message.content}"
+                )
 
     def function_tool(self, func: Any):
         return self.tools_manager.register_function_tool(func)
