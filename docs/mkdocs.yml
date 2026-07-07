@@ -39,21 +39,33 @@ nav:
         - 1. Add tools: get_started/add_tool.md
         - 2. Add memory: get_started/add_memory.md
         - 3. Async Invoking: get_started/async_invoke.md
-        - 4. Streaming: get_started/streaming.md
+        - 4. Streaming & Async Streaming: get_started/streaming.md
         - 5. Prebuilt Agent: get_started/react_agent.md
         - 6. Security: get_started/authen_layer.md
         - 7. Observability: get_started/observability.md
       - Run local ReactJS App: get_started/local_run.md
+    - AI Guardrail: 
+      - The Foundation of Responsible AI: get_started/ai_guardrail.md
+      - Secure and Sanboxed System Operations Agent: get_started/bash_agent_guide.md
     - Agent Development:
       - Workflow & Agent: get_started/workflow_and_agent.md
       - Agent RAG: get_started/agent_rag.md
     - Multi-Agent Development: 
       - Start with basic Multi-Agent: get_started/multi_agent.md
+      - Sequential Financial Analyst Crew: guides/01_sequential_financial_analyst_crew.md
+      - Branching Active Trading Advisory: guides/02_active_trading_advisory.md
+      - Quantitative Alpha Generation: guides/03_quantitative_alpha_generation.md
+      - Institutional Portfolio Management: guides/04_institutional_portfolio_management.md
 
   - Guidelines: 
     - Financial Usercase:
       - Visualize and Analyze Stock: guides/analyze_stock_trending.md
       - Find Trending New: guides/trending_news.md
+    - Multi-Agent in Finance:
+      - Sequential Financial Analyst Crew: guides/01_sequential_financial_analyst_crew.md
+      - Branching Active Trading Advisory: guides/02_active_trading_advisory.md
+      - Quantitative Alpha Generation: guides/03_quantitative_alpha_generation.md
+      - Institutional Portfolio Management: guides/04_institutional_portfolio_management.md
     - Banking Agent:
       - Banking SQL: guides/banking_agent.md
     - Research Usercase:
@@ -64,7 +76,7 @@ nav:
       - Customer Care Multi-Agent: guides/customer_care.md
     - RAG:
       - Agent RAG: guides/agent_rag.md
-    
+  
   - Reference: 
     - Agent: reference/agent.md
     - Tool: reference/tool.md
@@ -81,21 +93,17 @@ plugins:
       handlers:
         python:
           paths: [".."]
-          import:
-            - https://docs.python.org/3/objects.inv
           options:
             preload_modules:
               - vinagent
-            enable_inventory: true
             members_order: source
-            allow_inspection: true
+            allow_inspection: true  
             heading_level: 2
             show_bases: true
             show_source: false 
             summary: true
             inherited_members: true
-            selection:
-              docstring_style: google
+            docstring_style: google
             docstring_section_style: table
             show_root_toc_entry: false
             show_signature: true
@@ -105,9 +113,8 @@ plugins:
             show_symbol_type_heading: true
             show_symbol_type_toc: true
             signature_crossrefs: true
-            options:
-              filters:
-                - "!^_"
+            filters:
+              - "!^_"
 markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true

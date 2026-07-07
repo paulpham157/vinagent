@@ -1,6 +1,6 @@
 # Streaming Agent
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/datascienceworld-kan/vinagent/blob/main/doc/docs/tutorials/get_started/streaming.ipynb)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/datascienceworld-kan/vinagent/blob/main/docs/docs/tutorials/get_started/streaming.ipynb)
 
 ## Install libraries
 
@@ -92,3 +92,20 @@ for chunk in agent.stream(query="What is the weather in New York today?"):
     To| find| the| current| weather| in| New| York|,| I| will| use| the| search|_api| tool|
     
     According to the search_api tool, the current weather in New York today is 72°F with mist. The wind is blowing at 6 mph from the west, and the humidity is relatively high at 94%.|
+
+## Async Streaming
+Vinagent offer an `astream` method that is async version of `stream` to accelerate the speed of response. It is particularly useful for I/O bound tasks that needs waiting for data from external sources.
+
+```python
+import asyncio
+async def run_agent():
+    content = ""
+
+    async for chunk in agent.astream(query="Where is the capital of the Vietnam?"):
+        content += chunk.content or ""
+        print(chunk.content, end="", flush=True)
+
+    print("\nFinal content:", content)
+
+asyncio.run(run_agent())
+```
